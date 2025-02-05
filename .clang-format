@@ -1,0 +1,13 @@
+AllowShortIfStatementsOnASingleLine: true
+NamespaceIndentation: All
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: All
+ColumnLimit: 100
+BinPackArguments: false
+BinPackParameters: false
+ExperimentalAutoDetectBinPacking: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
+AlwaysBreakAfterReturnType: None
+IndentCaseLabels: true
+FixNamespaceComments: false
