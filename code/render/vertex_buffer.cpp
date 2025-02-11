@@ -1,4 +1,7 @@
 #include "vertex_buffer.h"
+#include "arena.h"
+#include "ds_array_static.h"
+#include <vulkan/vulkan_core.h>
 
 VkVertexInputBindingDescription render::vertex::getBindingDescription() {
   VkVertexInputBindingDescription bindingDescription{};
@@ -10,8 +13,8 @@ VkVertexInputBindingDescription render::vertex::getBindingDescription() {
   return bindingDescription;
 }
 
-ds::StaticArray<VkVertexInputAttributeDescription, 3> render::vertex::getAttributeDescriptions() {
-  ds::StaticArray<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+ds::StaticArray<VkVertexInputAttributeDescription, 3> render::vertex::getAttributeDescriptions(mem::Arena * scratch) {
+  ds::StaticArray<VkVertexInputAttributeDescription, 3> attributeDescriptions = ds::array::init<VkVertexInputAttributeDescription, 3>(scratch);
 
   attributeDescriptions.data[0].binding = 0;
   attributeDescriptions.data[0].location = 0;

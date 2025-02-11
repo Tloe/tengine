@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31.4)
+cmake_minimum_required(VERSION 3.30.3)
 project(tengine CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -12,7 +12,7 @@ if(WIN32)
     set(COMPILE_OPTS "/std:c++17")
 elseif(UNIX)
     set(COMPILE_OPTS
-      -Wall -Wno-vla -Wno-long-long -pedantic -std=c++20 -stdlib=libc++ -ferror-limit=0 -maes -mssse3)
+      -Wall -Wno-vla -Wno-long-long -Wno-gnu-statement-expression -pedantic -std=c++20 -stdlib=libc++ -ferror-limit=0 -maes -mssse3)
 endif()
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)

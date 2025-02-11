@@ -1,13 +1,9 @@
 #include <render.h>
 
-
-void cleanup() {
-}
-
 int main() {
-  te::render::init();
-  te::render::update();
-  te::render::cleanup();
+  render::init();
+  render::update();
+  render::cleanup();
 
   return 0;
 }

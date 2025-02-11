@@ -4,6 +4,7 @@
 #include "ds_array_static.h"
 #include "ds_string.h"
 #include "vulkan.h"
+#include "debug.h"
 #include "vulkan/vulkan.h"
 #include <SDL3/SDL_video.h>
 #include <SDL3/SDL_vulkan.h>
@@ -13,92 +14,19 @@
 #include <vulkan/vulkan_core.h>
 
 namespace {
-  const char *validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
-  const char *device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-
-  bool checkValidationLayerSupport() {
-    uint32_t layerCount;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-    VkLayerProperties availableLayers[layerCount];
-    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
-
-    for (const char *layerName : validation_layers) {
-      bool layerFound = false;
-
-      for (const auto &layerProperties : availableLayers) {
-        if (strcmp(layerName, layerProperties.layerName) == 0) {
-          layerFound = true;
-          break;
-        }
-      }
-
-      if (!layerFound) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  VKAPI_ATTR VkBool32 VKAPI_CALL
-  debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                VkDebugUtilsMessageTypeFlagsEXT messageType,
-                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                void *pUserData) {
-
-    fprintf(stderr, "validation layer:\n%s\n", pCallbackData->pMessage);
-
-    return VK_FALSE;
-  }
-
-  VkDebugUtilsMessengerCreateInfoEXT populateDebugMessengerCreateInfo() {
-    VkDebugUtilsMessengerCreateInfoEXT create_info{};
-
-    create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                              VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                              VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    create_info.pfnUserCallback = debugCallback;
-
-    return create_info;
-  }
-
-  void setupDebugMessenger(vulkan::Context in) {
-    auto debug_create_info = populateDebugMessengerCreateInfo();
-
-    auto fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(in.instance, "vkCreateDebugUtilsMessengerEXT"));
-
-    VkResult result;
-    if (fn != nullptr) {
-      result = fn(in.instance, &debug_create_info, nullptr, &in.debugMessenger);
-    } else {
-      result = VK_ERROR_EXTENSION_NOT_PRESENT;
-    }
-
-    if (result != VK_SUCCESS) {
-      printf("failed to setup debug messenger!");
-      exit(0);
-    }
-  }
-
   bool check_device_extension_support(mem::Arena *scratch, VkPhysicalDevice device) {
     auto available_extensions = vulkan::available_extensions(scratch, device);
 
-    for (U32 i = 0; i < sizeof(device_extensions) / sizeof(device_extensions[0]); i++) {
+    for (U32 i = 0; i < sizeof(vulkan::device_extensions) / sizeof(vulkan::device_extensions[0]); i++) {
       if (ds::array::contains(available_extensions,
-                              ds::string::init(scratch, device_extensions[i]))) {
+                              ds::string::init(scratch, vulkan::device_extensions[i]))) {
         return false;
       }
     }
     return true;
   }
 
-  bool isDeviceSuitable(mem::Arena *scratch, VkPhysicalDevice device, VkSurfaceKHR surface) {
+  bool is_device_suitable(mem::Arena *scratch, VkPhysicalDevice device, VkSurfaceKHR surface) {
     // TODO : Base device suitability checks at:
     // https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Physical_devices_and_queue_families
 
@@ -123,8 +51,7 @@ namespace {
   }
 
   VkPhysicalDevice
-  pickSuitableDevice(mem::Arena *scratch, VkInstance instance, VkSurfaceKHR surface) {
-
+  select_physical_device(mem::Arena *scratch, VkInstance instance, VkSurfaceKHR surface) {
     U32 device_count = 0;
     vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
 
@@ -133,38 +60,79 @@ namespace {
       exit(0);
     }
 
-    /* auto devices = ds::array::init<VkPhysicalDevice>(scratch, deviceCount, deviceCount); */
     VkPhysicalDevice devices[device_count];
     vkEnumeratePhysicalDevices(instance, &device_count, devices);
 
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-
     for (int i = 0; i < device_count; i++) {
-      if (isDeviceSuitable(scratch, devices[i], surface)) {
+      if (is_device_suitable(scratch, devices[i], surface)) {
         return devices[i];
       }
     }
 
-    if (physicalDevice == VK_NULL_HANDLE) {
-      printf("failed to find a suitable GPU");
-      exit(0);
-    }
+    printf("failed to find a suitable GPU");
+    exit(0);
 
     return VK_NULL_HANDLE;
   }
+
+  void create_logical_device(mem::Arena *scratch, bool debug, vulkan::Context &ctx) {
+    U32 graphics_family_index, present_family_index;
+    vulkan::queue_family_indices(ctx.physical_device,
+                                 ctx.surface,
+                                 &graphics_family_index,
+                                 &present_family_index);
+
+    auto unique_queue_families = ds::array::init<U32>(scratch);
+    ds::array::push_back_unique(unique_queue_families, graphics_family_index);
+    ds::array::push_back_unique(unique_queue_families, present_family_index);
+
+    F32 queue_priority = 1.0f;
+    VkDeviceQueueCreateInfo queue_create_infos[unique_queue_families._size];
+
+    for (U32 i = 0; i < unique_queue_families._size; i++) {
+      queue_create_infos[i] = VkDeviceQueueCreateInfo{};
+      queue_create_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+      queue_create_infos[i].queueFamilyIndex = unique_queue_families._data[i];
+      queue_create_infos[i].queueCount = 1;
+      queue_create_infos[i].pQueuePriorities = &queue_priority;
+    }
+
+    VkPhysicalDeviceFeatures device_features{};
+    device_features.samplerAnisotropy = VK_TRUE;
+    device_features.sampleRateShading = VK_TRUE;
+
+    VkDeviceCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    create_info.queueCreateInfoCount = unique_queue_families._size;
+    create_info.pQueueCreateInfos = queue_create_infos;
+    create_info.pEnabledFeatures = &device_features;
+    create_info.enabledExtensionCount = ds::array::size(vulkan::device_extensions);
+    create_info.ppEnabledExtensionNames = &vulkan::device_extensions[0];
+
+    if (debug) {
+      create_info.enabledLayerCount = ds::array::size(vulkan::validation_layers);
+      create_info.ppEnabledLayerNames = &vulkan::validation_layers[0];
+    } else {
+      create_info.enabledLayerCount = 0;
+    }
+
+    if (vkCreateDevice(ctx.physical_device, &create_info, nullptr, &ctx.logical_device) !=
+        VK_SUCCESS) {
+      printf("failed to create logical device!");
+      exit(0);
+    }
+
+    vkGetDeviceQueue(ctx.logical_device, graphics_family_index, 0, &ctx.graphics_queue);
+    vkGetDeviceQueue(ctx.logical_device, present_family_index, 0, &ctx.present_queue);
+  }
 }
 
-vulkan::Context vulkan::context::create(mem::Arena *scratch, SDL_Window *window , bool debug) {
-  if (debug && !checkValidationLayerSupport()) {
-    printf("validation layers requested, but not available!");
-    exit(0);
-  }
-
+vulkan::Context vulkan::context::create(mem::Arena *scratch, SDL_Window *window, bool debug) {
   VkApplicationInfo appInfo{};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   appInfo.pApplicationName = "Hello Triangle";
   appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-  appInfo.pEngineName = "No Engine";
+  appInfo.pEngineName = "tengine";
   appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
   appInfo.apiVersion = VK_API_VERSION_1_0;
 
@@ -181,7 +149,7 @@ vulkan::Context vulkan::context::create(mem::Arena *scratch, SDL_Window *window 
         static_cast<uint32_t>(sizeof(validation_layers) / sizeof(validation_layers[0]));
     createInfo.ppEnabledLayerNames = validation_layers;
 
-    auto debug_create_info = populateDebugMessengerCreateInfo();
+    auto debug_create_info = vulkan::debug_messenger_create_info();
     createInfo.pNext = &debug_create_info;
   } else {
     createInfo.enabledLayerCount = 0;
@@ -196,6 +164,7 @@ vulkan::Context vulkan::context::create(mem::Arena *scratch, SDL_Window *window 
   Context ctx;
   if (vkCreateInstance(&createInfo, nullptr, &ctx.instance) != VK_SUCCESS) {
     printf("failed to create instance\n");
+    exit(0);
   }
 
   uint32_t extensionCount = 0;
@@ -209,7 +178,7 @@ vulkan::Context vulkan::context::create(mem::Arena *scratch, SDL_Window *window 
   }
 
   if (debug) {
-    setupDebugMessenger(ctx);
+    vulkan::debug::init(ctx.instance);
   }
 
   if (!SDL_Vulkan_CreateSurface(window, ctx.instance, nullptr, &ctx.surface)) {
@@ -217,31 +186,22 @@ vulkan::Context vulkan::context::create(mem::Arena *scratch, SDL_Window *window 
     exit(0);
   }
 
-  ctx.physical_device = pickSuitableDevice(scratch,ctx.instance, ctx.surface);
-  vkGetPhysicalDeviceProperties(ctx.physical_device, &ctx.physical_device_properties);
+  ctx.physical_device = select_physical_device(scratch, ctx.instance, ctx.surface);
 
-  VkSampleCountFlags counts = ctx.physical_device_properties.limits.framebufferColorSampleCounts &
-                              ctx.physical_device_properties.limits.framebufferDepthSampleCounts;
+  ctx.max_msaa_samples = max_msaa_samples(ctx.physical_device);
 
-  ctx.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-  if (counts & VK_SAMPLE_COUNT_64_BIT) {
-    ctx.msaaSamples = VK_SAMPLE_COUNT_64_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_32_BIT) {
-    ctx.msaaSamples = VK_SAMPLE_COUNT_32_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_16_BIT) {
-    ctx.msaaSamples = VK_SAMPLE_COUNT_16_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_8_BIT) {
-    ctx.msaaSamples = VK_SAMPLE_COUNT_8_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_4_BIT) {
-    ctx.msaaSamples = VK_SAMPLE_COUNT_4_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_2_BIT) {
-    ctx.msaaSamples = VK_SAMPLE_COUNT_2_BIT;
-  }
+  create_logical_device(scratch, debug, ctx);
 
   return ctx;
+}
+
+void vulkan::context::cleanup(Context &ctx, bool debug) {
+  vkDestroyDevice(ctx.logical_device, nullptr);
+
+  if (debug) {
+    vulkan::debug::cleanup(ctx.instance);
+  }
+
+  vkDestroySurfaceKHR(ctx.instance, ctx.surface, nullptr);
+  vkDestroyInstance(ctx.instance, nullptr);
 }

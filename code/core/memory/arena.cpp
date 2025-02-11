@@ -2,9 +2,9 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <utility>
 
 namespace {
-
   bool is_power_of_two(uintptr_t x) { return (x & (x - 1)) == 0; }
 
   U32 align_forward(U8 *ptr, U8 align) {
@@ -76,7 +76,7 @@ U8 *mem::arena::resize(Arena *a, U8 *old_mem, U32 old_size, U32 new_size, U8 ali
   }
 }
 
-void mem::arena::free_all(Arena &a) {
+void mem::arena::reset(Arena &a) {
   a.curr_offset = 0;
   a.prev_offset = 0;
 }

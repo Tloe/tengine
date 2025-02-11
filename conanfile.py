@@ -16,8 +16,7 @@ class TEngine(ConanFile):
         self.folders.build = "build"
 
     def requirements(self):
-        # self.requires("glfw/3.4")
-        pass
+        self.requires("glm/1.0.1")
 
     def build_requirements(self):
         self.test_requires("catch2/3.8.0")

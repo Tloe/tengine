@@ -1,6 +1,7 @@
 #ifndef VERTEX_BUFFER_H
 #define VERTEX_BUFFER_H
 
+#include "arena.h"
 #include <functional>
 #include <vulkan/vulkan_core.h>
 
@@ -27,7 +28,7 @@ namespace render {
 
   namespace vertex {
     VkVertexInputBindingDescription getBindingDescription();
-    ds::StaticArray<VkVertexInputAttributeDescription, 3> getAttributeDescriptions();
+    ds::StaticArray<VkVertexInputAttributeDescription, 3> getAttributeDescriptions(mem::Arena * a);
   }
 }
 
