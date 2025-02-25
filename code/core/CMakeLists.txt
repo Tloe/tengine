@@ -1,6 +1,7 @@
 add_library(core)
 
 set(HEADERS
+    handle.h
     types.h)
 
 target_sources(core PUBLIC ${HEADERS})

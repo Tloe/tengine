@@ -1,5 +1,7 @@
-AllowShortIfStatementsOnASingleLine: true
+AllowShortNamespacesOnASingleLine: true
 NamespaceIndentation: All
+FixNamespaceComments: false
+AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortBlocksOnASingleLine: Empty
 AllowShortFunctionsOnASingleLine: All
 ColumnLimit: 100
@@ -8,6 +10,25 @@ BinPackParameters: false
 ExperimentalAutoDetectBinPacking: false
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowAllArgumentsOnNextLine: false
-AlwaysBreakAfterReturnType: None
 IndentCaseLabels: true
-FixNamespaceComments: false
+BreakAfterReturnType: Automatic 
+PenaltyReturnTypeOnItsOwnLine: 10
+PointerAlignment: Left
+AlwaysBreakTemplateDeclarations: Yes
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+IncludeBlocks: Regroup

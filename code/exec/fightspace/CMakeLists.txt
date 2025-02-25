@@ -4,6 +4,7 @@ target_link_libraries(fightspace
   PUBLIC
     vulkan
   PRIVATE
+    core
     render)
 
 set_target_properties(fightspace

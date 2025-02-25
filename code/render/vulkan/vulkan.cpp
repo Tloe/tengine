@@ -2,35 +2,9 @@
 #include "arena.h"
 #include "ds_array_dynamic.h"
 #include "ds_string.h"
+#include "vulkan/context.h"
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan_core.h>
-
-namespace {
-   VKAPI_ATTR VkBool32 VKAPI_CALL
-  debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                VkDebugUtilsMessageTypeFlagsEXT messageType,
-                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                void *pUserData) {
-    fprintf(stderr, "validation layer: %s\n", pCallbackData->pMessage);
-
-    return VK_FALSE;
-  }
-}
-
-VkDebugUtilsMessengerCreateInfoEXT vulkan::debug_messenger_create_info() {
-  VkDebugUtilsMessengerCreateInfoEXT create_info{};
-
-  create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-  create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-  create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-  create_info.pfnUserCallback = debugCallback;
-
-  return create_info;
-}
 
 ds::DynamicArray<const char *> vulkan::required_extension(mem::Arena *perm, bool debug) {
   U32 sdl_extension_count = 0;
@@ -66,36 +40,6 @@ ds::DynamicArray<ds::String> vulkan::available_extensions(mem::Arena *perm,
   return result;
 }
 
-vulkan::SwapChainSupportDetails
-vulkan::query_swap_chain_support(mem::Arena *perm, VkPhysicalDevice device, VkSurfaceKHR surface) {
-  SwapChainSupportDetails details = {
-      .capabilities = VkSurfaceCapabilitiesKHR{},
-      .formats = ds::array::init<VkSurfaceFormatKHR>(perm),
-      .presentModes = ds::array::init<VkPresentModeKHR>(perm),
-  };
-
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
-
-  U32 formatCount;
-  vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-  if (formatCount != 0) {
-    ds::array::resize(details.formats, formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats._data);
-  }
-
-  uint32_t presentModeCount;
-  vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
-  if (presentModeCount != 0) {
-    ds::array::resize(details.presentModes, presentModeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device,
-                                              surface,
-                                              &presentModeCount,
-                                              details.presentModes._data);
-  }
-
-  return details;
-}
-
 bool vulkan::queue_family_indices(VkPhysicalDevice device,
                                   VkSurfaceKHR surface,
                                   U32 *graphicsFamily,
@@ -129,38 +73,36 @@ bool vulkan::queue_family_indices(VkPhysicalDevice device,
   return false;
 }
 
-VkPhysicalDeviceProperties vulkan::properties(VkPhysicalDevice physical_device) {
-  VkPhysicalDeviceProperties properties;
+VkCommandBuffer vulkan::begin_single_time_commands(ContextPtr ctx) {
+  VkCommandBufferAllocateInfo alloc_info{};
+  alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  alloc_info.commandPool = ctx->command_pool;
+  alloc_info.commandBufferCount = 1;
 
-  vkGetPhysicalDeviceProperties(physical_device, &properties);
-  return properties;
+  VkCommandBuffer command_buffer;
+  vkAllocateCommandBuffers(ctx->logical_device, &alloc_info, &command_buffer);
+
+  VkCommandBufferBeginInfo begin_info{};
+  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(command_buffer, &begin_info);
+
+  return command_buffer;
 }
 
-VkSampleCountFlagBits vulkan::max_msaa_samples(VkPhysicalDevice physical_device) {
-  auto props = properties(physical_device);
+void vulkan::end_single_time_commands(ContextPtr ctx, VkCommandBuffer command_buffer) {
 
-  VkSampleCountFlags counts =
-      props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
+  vkEndCommandBuffer(command_buffer);
 
-  if (counts & VK_SAMPLE_COUNT_64_BIT) {
-    return VK_SAMPLE_COUNT_64_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_32_BIT) {
-    return VK_SAMPLE_COUNT_32_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_16_BIT) {
-    return VK_SAMPLE_COUNT_16_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_8_BIT) {
-    return VK_SAMPLE_COUNT_8_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_4_BIT) {
-    return VK_SAMPLE_COUNT_4_BIT;
-  }
-  if (counts & VK_SAMPLE_COUNT_2_BIT) {
-    return VK_SAMPLE_COUNT_2_BIT;
-  }
+  VkSubmitInfo submit_info{};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &command_buffer;
 
-  return VK_SAMPLE_COUNT_1_BIT;
+  vkQueueSubmit(ctx->graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+  vkQueueWaitIdle(ctx->graphics_queue);
+
+  vkFreeCommandBuffers(ctx->logical_device, ctx->command_pool, 1, &command_buffer);
 }
-

@@ -15,7 +15,7 @@ find_package(glm REQUIRED)
 
 target_sources(render PUBLIC ${HEADERS} PRIVATE ${SOURCES})
 
-target_include_directories(render PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+target_include_directories(render PUBLIC  ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(render PRIVATE core SDL3::SDL3 glm::glm)
 

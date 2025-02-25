@@ -1,6 +1,7 @@
 #include "debug.h"
 #include "ds_array_static.h"
 #include "vulkan.h"
+#include <cstdio>
 #include <cstdlib>
 #include <types.h>
 #include <vulkan/vulkan_core.h>
@@ -32,6 +33,16 @@ namespace {
 
     return true;
   }
+
+  VKAPI_ATTR VkBool32 VKAPI_CALL
+  debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                VkDebugUtilsMessageTypeFlagsEXT messageType,
+                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                void *pUserData) {
+    fprintf(stderr, "validation layer: %s\n", pCallbackData->pMessage);
+
+    return VK_FALSE;
+  }
 }
 
 void vulkan::debug::init(VkInstance instance) {
@@ -39,7 +50,7 @@ void vulkan::debug::init(VkInstance instance) {
     printf("validation layers requested, but not available!");
     exit(0);
   }
-  auto debug_create_info = vulkan::debug_messenger_create_info();
+  auto debug_create_info = debug::debug_messenger_create_info();
 
   auto fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
       vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
@@ -64,4 +75,19 @@ void vulkan::debug::cleanup(VkInstance instance) {
   if (func != nullptr) {
     func(instance, debugMessenger, nullptr);
   }
+}
+
+VkDebugUtilsMessengerCreateInfoEXT vulkan::debug::debug_messenger_create_info() {
+  VkDebugUtilsMessengerCreateInfoEXT create_info{};
+
+  create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+  create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+  create_info.pfnUserCallback = debugCallback;
+
+  return create_info;
 }

@@ -4,7 +4,6 @@
 #include "arena.h"
 #include "types.h"
 #include <cassert>
-#include <cstdio>
 #include <cstring>
 
 namespace ds {
@@ -12,12 +11,12 @@ namespace ds {
     U32 _size = 0;
     U32 _capacity = 0;
     T *_data = nullptr;
-    mem::Arena *_a;
+    mem::ArenaPtr _a;
   };
 
   namespace array {
-    template <typename T> DynamicArray<T> init(mem::Arena *a, U32 capacity = 8, U32 size = 0);
-    template <typename T> DynamicArray<T> init(mem::Arena *a, const T *beg, const T *end);
+    template <typename T> DynamicArray<T> init(mem::ArenaPtr a, U32 capacity = 8, U32 size = 0);
+    template <typename T> DynamicArray<T> init(mem::ArenaPtr a, const T *beg, const T *end);
     template <typename T> void reserve(DynamicArray<T> &da, U32 new_capacity);
     template <typename T> void resize(DynamicArray<T> &da, U32 size);
     template <typename T> T &push_back(DynamicArray<T> &da, const T &t);
@@ -31,7 +30,7 @@ namespace ds {
 
 namespace ds {
   namespace array {
-    template <typename T> ds::DynamicArray<T> init(mem::Arena *a, U32 capacity, U32 size) {
+    template <typename T> ds::DynamicArray<T> init(mem::ArenaPtr a, U32 capacity, U32 size) {
       assert(size <= capacity && "init size is larger than capacity");
       DynamicArray<T> da{
           ._size = size,
@@ -43,7 +42,7 @@ namespace ds {
       return da;
     }
 
-    template <typename T> ds::DynamicArray<T> init(mem::Arena *a, const T *beg, const T *end) {
+    template <typename T> ds::DynamicArray<T> init(mem::ArenaPtr a, const T *beg, const T *end) {
       U32 size = static_cast<U32>(end - beg);
       DynamicArray<T> da{
           ._size = size,

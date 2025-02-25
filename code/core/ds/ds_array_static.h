@@ -3,28 +3,27 @@
 
 #include "arena.h"
 #include "types.h"
+
 #include <cassert>
 #include <cstddef>
 
-namespace mem {
-  struct Arena;
-}
+namespace mem { struct Arena; }
 
 namespace ds {
   template <typename T, U32 SIZE> struct StaticArray {
     const U32 size = SIZE;
-    T *data = nullptr;
+    T*        data = nullptr;
   };
 
   namespace array {
-    template <typename T, U32 SIZE> StaticArray<T, SIZE> init(mem::Arena *a) {
+    template <typename T, U32 SIZE> StaticArray<T, SIZE> init(mem::Arena* a) {
       return StaticArray<T, SIZE>{
           .size = SIZE,
           .data = mem::arena::alloc<T>(a, sizeof(T) * SIZE),
       };
     }
 
-    template <typename T, U32 SIZE> U32 bytes(StaticArray<T, SIZE> &sa) {
+    template <typename T, U32 SIZE> U32 bytes(StaticArray<T, SIZE>& sa) {
       return sizeof(sa.data) * sa.size;
     }
 

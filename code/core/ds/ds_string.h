@@ -1,14 +1,16 @@
 #ifndef STRING_H
 #define STRING_H
 
-#include "arena.h"
 #include "types.h"
+
+namespace mem {struct Arena; }
+namespace mem { typedef Arena* ArenaPtr; }
 
 namespace ds {
   struct String {
     U32 _size = 0;
     char *_data = nullptr;
-    mem::Arena *_a;
+    mem::ArenaPtr _a;
   };
 
   bool operator==(const String &lhs, const String &rhs);
@@ -24,10 +26,10 @@ namespace ds {
   String &operator+=(String &lhs, const char *rhs);
 
   namespace string {
-    String init(mem::Arena *a);
-    String init(mem::Arena *a, const String &str);
-    String init(mem::Arena *a, const char *cstr);
-    String init(mem::Arena *a, const char c);
+    String init(mem::ArenaPtr a);
+    String init(mem::ArenaPtr a, const String &str);
+    String init(mem::ArenaPtr a, const char *cstr);
+    String init(mem::ArenaPtr a, const char c);
 
     char *c_str(const String &str);
   }
