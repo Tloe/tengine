@@ -33,14 +33,14 @@ VkFormat vulkan::device::find_depth_format(VkPhysicalDevice physical_device) {
 
   VkFormatFeatureFlags features = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-  for (U32 i = 0; i < ds::array::size(candidates); i++) {
-    VkFormatProperties props;
-    vkGetPhysicalDeviceFormatProperties(physical_device, candidates[i], &props);
+  for (U32 i = 0; i < array::size(candidates); i++) {
+    VkFormatProperties device_properties;
+    vkGetPhysicalDeviceFormatProperties(physical_device, candidates[i], &device_properties);
 
-    if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+    if (tiling == VK_IMAGE_TILING_LINEAR && (device_properties.linearTilingFeatures & features) == features) {
       return candidates[i];
     } else if (tiling == VK_IMAGE_TILING_OPTIMAL &&
-               (props.optimalTilingFeatures & features) == features) {
+               (device_properties.optimalTilingFeatures & features) == features) {
       return candidates[i];
     }
   }

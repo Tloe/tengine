@@ -12,9 +12,9 @@ AllowAllParametersOfDeclarationOnNextLine: false
 AllowAllArgumentsOnNextLine: false
 IndentCaseLabels: true
 BreakAfterReturnType: Automatic 
-PenaltyReturnTypeOnItsOwnLine: 10
+PenaltyReturnTypeOnItsOwnLine: 1
 PointerAlignment: Left
-AlwaysBreakTemplateDeclarations: Yes
+AlwaysBreakTemplateDeclarations: "Yes"
 AlignConsecutiveAssignments:
   Enabled: true
   AcrossEmptyLines: false
@@ -32,3 +32,4 @@ AlignConsecutiveMacros:
   AcrossEmptyLines: false
   AcrossComments: false
 IncludeBlocks: Regroup
+AlignAfterOpenBracket: Align

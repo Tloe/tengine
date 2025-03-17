@@ -1,5 +1,4 @@
-#ifndef DEVICE_H
-#define DEVICE_H
+#pragma once
 
 #include "types.h"
 
@@ -17,4 +16,3 @@ namespace vulkan {
   }
 
 }
-#endif

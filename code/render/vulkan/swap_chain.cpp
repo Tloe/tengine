@@ -1,22 +1,29 @@
 #include "swap_chain.h"
 
 #include "arena.h"
+#include "context.h"
+#include "device.h"
 #include "ds_array_dynamic.h"
 #include "ds_array_static.h"
+#include "handles.h"
+#include "images.h"
+#include "render_pass.h"
 #include "vulkan.h"
-#include "vulkan/context.h"
-#include "vulkan/device.h"
-#include "vulkan/image.h"
 
+#include <SDL3/SDL_events.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <glm/common.hpp>
 #include <vulkan/vulkan_core.h>
 
+namespace vulkan { SwapChain _swap_chain = {}; }
+
 namespace {
-  VkPresentModeKHR choose_swap_present_mode(
-      const ds::DynamicArray<VkPresentModeKHR>& available_present_modes) {
+  auto _mem_render = arena::by_name("render");
+
+  VkPresentModeKHR
+  choose_swap_present_mode(const DynamicArray<VkPresentModeKHR>& available_present_modes) {
     for (U32 i = 0; i < available_present_modes._size; i++) {
       if (available_present_modes._data[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
         return available_present_modes._data[i];
@@ -26,16 +33,14 @@ namespace {
     return VK_PRESENT_MODE_FIFO_KHR;
   }
 
-  VkExtent2D choose_swap_extent(SDL_Window*                     window,
-                                const VkSurfaceCapabilitiesKHR& capabilities) {
+  VkExtent2D choose_swap_extent(SDL_Window* window, const VkSurfaceCapabilitiesKHR& capabilities) {
     if (capabilities.currentExtent.width != UINT32_MAX) {
       return capabilities.currentExtent;
     } else {
       int width, height;
       SDL_GetWindowSize(window, &width, &height);
 
-      VkExtent2D actual_extent = {static_cast<uint32_t>(width),
-                                  static_cast<uint32_t>(height)};
+      VkExtent2D actual_extent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
 
       actual_extent.width  = glm::clamp(actual_extent.width,
                                        capabilities.minImageExtent.width,
@@ -48,68 +53,88 @@ namespace {
     }
   }
 
-  vulkan::ImageHandle
-  create_depth_image(vulkan::ContextPtr ctx, U32 width, U32 height) {
-    VkFormat depth_format =
-        vulkan::device::find_depth_format(ctx->physical_device);
+  vulkan::ImageHandle create_depth_image(U32 width, U32 height) {
+    VkFormat depth_format = vulkan::device::find_depth_format(vulkan::_ctx.physical_device);
 
-    auto image_handle =
-        vulkan::image::create(width,
-                              height,
-                              depth_format,
-                              VK_IMAGE_TILING_OPTIMAL,
-                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                              1,
-                              ctx->max_msaa_samples);
+    auto image_handle = vulkan::images::create(width,
+                                               height,
+                                               depth_format,
+                                               VK_IMAGE_TILING_OPTIMAL,
+                                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                               1,
+                                               vulkan::_ctx.max_msaa_samples);
 
-    vulkan::image::create_view(image_handle, VK_IMAGE_ASPECT_DEPTH_BIT);
+    vulkan::images::create_view(image_handle, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    vulkan::image::transition_layout(
-        image_handle,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    vulkan::images::transition_layout(image_handle,
+                                      VK_IMAGE_LAYOUT_UNDEFINED,
+                                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     return image_handle;
   }
 
-  vulkan::ImageHandle create_multisampling(vulkan::ContextPtr ctx,
-                                           VkFormat           color_format,
-                                           U32                width,
-                                           U32                height) {
-    auto image_handle =
-        vulkan::image::create(width,
-                              height,
-                              color_format,
-                              VK_IMAGE_TILING_OPTIMAL,
-                              VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
-                                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                              1,
-                              ctx->max_msaa_samples);
+  vulkan::ImageHandle create_multisampling(VkFormat color_format, U32 width, U32 height) {
+    auto image_handle = vulkan::images::create(width,
+                                               height,
+                                               color_format,
+                                               VK_IMAGE_TILING_OPTIMAL,
+                                               VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
+                                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                               1,
+                                               vulkan::_ctx.max_msaa_samples);
 
-    vulkan::image::create_view(image_handle, VK_IMAGE_ASPECT_COLOR_BIT);
+    vulkan::images::create_view(image_handle, VK_IMAGE_ASPECT_COLOR_BIT);
 
     return image_handle;
+  }
+
+  void create_framebuffers(vulkan::RenderPassHandle render_pass) {
+
+    printf("\n\ncreate_framebuffers() %d\n", vulkan::_swap_chain.frame_buffers._size);
+
+    for (U32 i = 0; i < vulkan::_swap_chain.image_handles._size; i++) {
+      VkImageView attachments[] = {
+          *vulkan::images::view(vulkan::_swap_chain.multisampling),
+          *vulkan::images::view(vulkan::_swap_chain.depth),
+          *vulkan::images::view(vulkan::_swap_chain.image_handles._data[i])};
+
+      VkFramebufferCreateInfo create_info{};
+      create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+      create_info.renderPass      = *vulkan::render_pass::render_pass(render_pass);
+      create_info.attachmentCount = array::size(attachments);
+      create_info.pAttachments    = attachments;
+      create_info.width           = vulkan::_swap_chain.extent.width;
+      create_info.height          = vulkan::_swap_chain.extent.height;
+      create_info.layers          = 1;
+
+      vulkan::_swap_chain.frame_buffers._data[i] = VK_NULL_HANDLE;
+
+      printf("i is: %d\n", i);
+      printf("logical_device: %p\n", vulkan::_ctx.logical_device);
+      printf("swap_chain.frame_buffers[i] is: %p\n", vulkan::_swap_chain.frame_buffers._data[i]);
+
+      ASSERT_SUCCESS("failed to create framebuffer!",
+                     vkCreateFramebuffer(vulkan::_ctx.logical_device,
+                                         &create_info,
+                                         nullptr,
+                                         &vulkan::_swap_chain.frame_buffers._data[i]));
+
+      printf("done\n");
+    }
   }
 }
 
-vulkan::SwapChain vulkan::swap_chain::create(ContextPtr    ctx,
-                                             mem::ArenaPtr a,
-                                             SDL_Window*   window) {
+void vulkan::swap_chain::create(vulkan::RenderPassHandle render_pass, SDL_Window* window) {
   auto swap_chain_support =
-      vulkan::swap_chain::swap_chain_support(a,
-                                             ctx->physical_device,
-                                             ctx->surface);
+      vulkan::swap_chain::swap_chain_support(vulkan::_ctx.physical_device, vulkan::_ctx.surface);
 
-  VkSurfaceFormatKHR surface_format = vulkan::context::surface_format(ctx);
-  VkPresentModeKHR   presentMode =
-      ::choose_swap_present_mode(swap_chain_support.present_modes);
+  VkSurfaceFormatKHR surface_format = vulkan::context::surface_format();
+  VkPresentModeKHR   presentMode    = ::choose_swap_present_mode(swap_chain_support.present_modes);
 
-  VkExtent2D extent =
-      choose_swap_extent(window, swap_chain_support.capabilities);
-
-  U32 image_count = swap_chain_support.capabilities.minImageCount + 1;
+  VkExtent2D extent      = choose_swap_extent(window, swap_chain_support.capabilities);
+  U32        image_count = swap_chain_support.capabilities.minImageCount + 1;
   if (swap_chain_support.capabilities.maxImageCount > 0 &&
       image_count > swap_chain_support.capabilities.maxImageCount) {
     image_count = swap_chain_support.capabilities.maxImageCount;
@@ -117,7 +142,7 @@ vulkan::SwapChain vulkan::swap_chain::create(ContextPtr    ctx,
 
   VkSwapchainCreateInfoKHR create_info{};
   create_info.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-  create_info.surface          = ctx->surface;
+  create_info.surface          = vulkan::_ctx.surface;
   create_info.minImageCount    = image_count;
   create_info.imageFormat      = surface_format.format;
   create_info.imageColorSpace  = surface_format.colorSpace;
@@ -126,8 +151,8 @@ vulkan::SwapChain vulkan::swap_chain::create(ContextPtr    ctx,
   create_info.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
   U32 queue_family_indices[2];
-  vulkan::queue_family_indices(ctx->physical_device,
-                               ctx->surface,
+  vulkan::queue_family_indices(vulkan::_ctx.physical_device,
+                               vulkan::_ctx.surface,
                                &queue_family_indices[0],
                                &queue_family_indices[1]);
 
@@ -145,106 +170,109 @@ vulkan::SwapChain vulkan::swap_chain::create(ContextPtr    ctx,
   create_info.clipped        = VK_TRUE;
   create_info.oldSwapchain   = VK_NULL_HANDLE;
 
-  auto depth         = create_depth_image(ctx, extent.width, extent.height);
-  auto multisampling = create_multisampling(ctx,
-                                            surface_format.format,
-                                            extent.width,
-                                            extent.height);
+  auto depth         = create_depth_image(extent.width, extent.height);
+  auto multisampling = create_multisampling(surface_format.format, extent.width, extent.height);
 
-  vulkan::SwapChain swap_chain = {
+  _swap_chain = {
       .depth         = depth,
       .multisampling = multisampling,
-      .frame_buffers =
-          ds::array::init<VkFramebuffer>(a, image_count, image_count),
-      .image_handles =
-          ds::array::init<ImageHandle>(a, image_count, image_count),
+      .frame_buffers = array::init<VkFramebuffer>(_mem_render, image_count, image_count),
+      .image_handles = array::init<ImageHandle>(_mem_render, image_count, image_count),
+      .window        = window,
+      .render_pass   = render_pass,
   };
 
-  if (vkCreateSwapchainKHR(ctx->logical_device,
-                           &create_info,
-                           nullptr,
-                           &swap_chain.swap_chain) != VK_SUCCESS) {
-    printf("failed to create swap chain!");
-    exit(0);
-  }
+  ASSERT_SUCCESS("failed to create swap chain!",
+                 vkCreateSwapchainKHR(vulkan::_ctx.logical_device,
+                                      &create_info,
+                                      nullptr,
+                                      &_swap_chain.swap_chain));
 
-  vkGetSwapchainImagesKHR(ctx->logical_device,
-                          swap_chain.swap_chain,
+  vkGetSwapchainImagesKHR(vulkan::_ctx.logical_device,
+                          _swap_chain.swap_chain,
                           &image_count,
                           nullptr);
+
+  printf("image_count: %d\n", image_count);
   VkImage images[image_count];
-  vkGetSwapchainImagesKHR(ctx->logical_device,
-                          swap_chain.swap_chain,
+  vkGetSwapchainImagesKHR(vulkan::_ctx.logical_device,
+                          _swap_chain.swap_chain,
                           &image_count,
                           images);
 
-  for (U32 i = 0; i < image_count; i++) {
-    swap_chain.image_handles._data[i] =
-        vulkan::image::add(images[i], surface_format.format, 1);
-  }
-
-  swap_chain.image_format = surface_format.format;
-  swap_chain.extent       = extent;
+  printf("image_count: %d\n", image_count);
 
   for (U32 i = 0; i < image_count; i++) {
-    vulkan::image::create_view(swap_chain.image_handles._data[i],
-                               VK_IMAGE_ASPECT_COLOR_BIT);
+    _swap_chain.image_handles._data[i] = vulkan::images::add(images[i], surface_format.format, 1);
   }
 
-  return swap_chain;
+  _swap_chain.image_format = surface_format.format;
+  _swap_chain.extent       = extent;
+
+  for (U32 i = 0; i < image_count; i++) {
+    printf("create view: i: %d handle.value %d\n", i, _swap_chain.image_handles._data[i].value);
+    vulkan::images::create_view(_swap_chain.image_handles._data[i], VK_IMAGE_ASPECT_COLOR_BIT);
+    printf("Color View: %p\n",
+           (void*)*vulkan::images::view(vulkan::_swap_chain.image_handles._data[i]));
+  }
+  create_framebuffers(render_pass);
 }
 
-void
-vulkan::swap_chain::cleanup(vulkan::ContextPtr ctx, SwapChainPtr swap_chain) {
-  vulkan::image::cleanup(swap_chain->multisampling);
-  vulkan::image::cleanup(swap_chain->depth);
+void vulkan::swap_chain::cleanup() {
+  vulkan::images::cleanup(vulkan::_swap_chain.multisampling);
+  vulkan::images::cleanup(vulkan::_swap_chain.depth);
 
-  for (U32 i = 0; i < swap_chain->frame_buffers._size; i++) {
-    vkDestroyFramebuffer(ctx->logical_device,
-                         swap_chain->frame_buffers._data[i],
+  for (U32 i = 0; i < vulkan::_swap_chain.frame_buffers._size; i++) {
+    vkDestroyFramebuffer(vulkan::_ctx.logical_device,
+                         vulkan::_swap_chain.frame_buffers._data[i],
                          nullptr);
+    vulkan::_swap_chain.frame_buffers._data[i] = VK_NULL_HANDLE;
   }
 
-  for (U32 i = 0; i < swap_chain->image_handles._size; i++) {
-    vkDestroyImageView(ctx->logical_device,
-                       *image::view(swap_chain->image_handles._data[i]),
-                       nullptr);
+  for (U32 i = 0; i < vulkan::_swap_chain.image_handles._size; i++) {
+    vulkan::images::cleanup_view(vulkan::_swap_chain.image_handles._data[i]);
   }
 
-  vkDestroySwapchainKHR(ctx->logical_device, swap_chain->swap_chain, nullptr);
+  vkDestroySwapchainKHR(vulkan::_ctx.logical_device, vulkan::_swap_chain.swap_chain, nullptr);
+}
+
+void vulkan::swap_chain::recreate() {
+  int width = 0, height = 0;
+  SDL_GetWindowSize(vulkan::_swap_chain.window, &width, &height);
+  while (width == 0 || height == 0) {
+    SDL_GetWindowSize(vulkan::_swap_chain.window, &width, &height);
+    SDL_Event e;
+    SDL_PollEvent(&e);
+  }
+
+  vkDeviceWaitIdle(vulkan::_ctx.logical_device);
+
+  cleanup();
+
+  vulkan::swap_chain::create(vulkan::_swap_chain.render_pass, vulkan::_swap_chain.window);
 }
 
 vulkan::SwapChainSupport
-vulkan::swap_chain::swap_chain_support(mem::Arena*      perm,
-                                       VkPhysicalDevice device,
-                                       VkSurfaceKHR     surface) {
+vulkan::swap_chain::swap_chain_support(VkPhysicalDevice device, VkSurfaceKHR surface) {
   SwapChainSupport details{
       .capabilities  = VkSurfaceCapabilitiesKHR{},
-      .formats       = ds::array::init<VkSurfaceFormatKHR>(perm),
-      .present_modes = ds::array::init<VkPresentModeKHR>(perm),
+      .formats       = array::init<VkSurfaceFormatKHR>(arena::scratch()),
+      .present_modes = array::init<VkPresentModeKHR>(arena::scratch()),
   };
 
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device,
-                                            surface,
-                                            &details.capabilities);
+  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
 
   U32 format_count;
   vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, nullptr);
   if (format_count != 0) {
-    ds::array::resize(details.formats, format_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device,
-                                         surface,
-                                         &format_count,
-                                         details.formats._data);
+    array::resize(details.formats, format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, details.formats._data);
   }
 
   U32 present_mode_count;
-  vkGetPhysicalDeviceSurfacePresentModesKHR(device,
-                                            surface,
-                                            &present_mode_count,
-                                            nullptr);
+  vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, nullptr);
   if (present_mode_count != 0) {
-    ds::array::resize(details.present_modes, present_mode_count);
+    array::resize(details.present_modes, present_mode_count);
     vkGetPhysicalDeviceSurfacePresentModesKHR(device,
                                               surface,
                                               &present_mode_count,
@@ -252,35 +280,4 @@ vulkan::swap_chain::swap_chain_support(mem::Arena*      perm,
   }
 
   return details;
-}
-
-void vulkan::swap_chain::create_framebuffers(vulkan::ContextPtr   ctx,
-                                             VkRenderPass         render_pass,
-                                             vulkan::SwapChainPtr swap_chain) {
-  for (U32 i = 0; i < swap_chain->image_handles._size; i++) {
-    VkImageView attachments[] = {
-        *image::view(swap_chain->multisampling),
-        *image::view(swap_chain->depth),
-        *image::view(swap_chain->image_handles._data[i])};
-
-    VkFramebufferCreateInfo create_info{};
-    create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    create_info.renderPass      = render_pass;
-    create_info.attachmentCount = ds::array::size(attachments);
-    create_info.pAttachments    = attachments;
-    create_info.width           = swap_chain->extent.width;
-    create_info.height          = swap_chain->extent.height;
-    create_info.layers          = 1;
-
-    swap_chain->frame_buffers._data[i] = VK_NULL_HANDLE;
-
-    if (vkCreateFramebuffer(ctx->logical_device,
-                            &create_info,
-                            nullptr,
-                            &swap_chain->frame_buffers._data[i]) !=
-        VK_SUCCESS) {
-      printf("failed to create framebuffer!");
-      exit(0);
-    }
-  }
 }

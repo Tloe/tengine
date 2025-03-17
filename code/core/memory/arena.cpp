@@ -1,12 +1,22 @@
 #include "arena.h"
 
+#include "handles.h"
 #include "types.h"
 
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace {
+  const U8 MAX_ARENA_COUNT = U8_MAX;
+
+  struct {
+    const char* name = "";
+    ArenaHandle handle;
+    Arena       a;
+  } _arenas[MAX_ARENA_COUNT] = {{}};
+
   bool is_power_of_two(uintptr_t x) { return (x & (x - 1)) == 0; }
 
   U32 align_forward(U8* ptr, U8 align) {
@@ -23,18 +33,50 @@ namespace {
   }
 }
 
-mem::Arena mem::arena::init(U8* mem, U32 mem_size) {
-  mem::Arena a{
-      .buf         = reinterpret_cast<unsigned char*>(mem),
-      .buf_len     = mem_size,
-      .prev_offset = 0,
-      .curr_offset = 0,
-  };
+ArenaHandle arena::set(const char* name, U8* mem, U32 mem_size) {
+  ArenaHandle handle = by_name(name);
 
-  return a;
+  _arenas[handle.value].name          = name;
+  _arenas[handle.value].a.buf         = mem;
+  _arenas[handle.value].a.buf_len     = mem_size;
+  _arenas[handle.value].a.curr_offset = 0;
+  _arenas[handle.value].a.prev_offset = 0;
+
+  return handle;
 }
 
-U8* mem::arena::alloc(mem::ArenaPtr a, U32 size, U8 align) {
+void arena::set_scratch(U8* mem, U32 size) {
+  _arenas[0].name          = "scratch";
+  _arenas[0].a.buf         = mem;
+  _arenas[0].a.buf_len     = size;
+  _arenas[0].a.curr_offset = 0;
+  _arenas[0].a.prev_offset = 0;
+}
+
+ArenaHandle arena::by_name(const char* name) {
+  for (U8 i = 1; i < MAX_ARENA_COUNT; ++i) {
+    if (_arenas[i].name[0] == '\0') break;
+
+    if (strcmp(_arenas[i].name, name) == 0) {
+      return ArenaHandle{.value = i};
+    }
+  }
+
+  for (U8 i = 1; i < MAX_ARENA_COUNT; ++i) {
+    if (_arenas[i].name[0] == '\0') {
+      _arenas[i].name = name;
+      return ArenaHandle{.value = i};
+    }
+  }
+
+  assert(false && "ran out of arena allocators!");
+}
+
+U8* arena::alloc(ArenaHandle handle, U32 size, U8 align) {
+  assert(_arenas[handle.value].a.buf_len != 0 && "this arena has not been set up");
+
+  auto a = &_arenas[handle.value].a;
+
   auto curr_ptr = a->buf + a->curr_offset;
   U32  offset   = align_forward(curr_ptr, align);
   offset -= reinterpret_cast<uintptr_t>(a->buf);
@@ -48,20 +90,20 @@ U8* mem::arena::alloc(mem::ArenaPtr a, U32 size, U8 align) {
 
     return ptr;
   }
-  
-  assert(false && "Memory is out of bounds of the buffer in this arena");
+
+  printf("Memory is out of bounds of the buffer in this arena. Name of arena: '%s'\n",
+         _arenas[handle.value].name);
+  assert(false);
   return nullptr;
 }
 
-U8* mem::arena::resize(ArenaPtr a,
-                       U8*      old_mem,
-                       U32      old_size,
-                       U32      new_size,
-                       U8       align) {
+U8* arena::resize(ArenaHandle handle, U8* old_mem, U32 old_size, U32 new_size, U8 align) {
   assert(is_power_of_two(align));
 
+  auto a = &_arenas[handle.value].a;
+
   if (old_mem == nullptr || old_size == 0) {
-    return alloc(a, new_size, align);
+    return alloc(handle, new_size, align);
   } else if (a->buf <= old_mem && old_mem < a->buf + a->buf_len) {
     if (a->buf + a->prev_offset == old_mem) {
       a->curr_offset = a->prev_offset + new_size;
@@ -70,7 +112,7 @@ U8* mem::arena::resize(ArenaPtr a,
       }
       return old_mem;
     } else {
-      U8*    new_mem   = alloc(a, new_size, align);
+      U8*    new_mem   = alloc(handle, new_size, align);
       size_t copy_size = old_size < new_size ? old_size : new_size;
 
       memmove(new_mem, old_mem, copy_size);
@@ -84,7 +126,9 @@ U8* mem::arena::resize(ArenaPtr a,
   }
 }
 
-void mem::arena::reset(ArenaPtr a) {
+void arena::reset(ArenaHandle handle) {
+  auto a = &_arenas[handle.value].a;
+
   a->curr_offset = 0;
   a->prev_offset = 0;
 }

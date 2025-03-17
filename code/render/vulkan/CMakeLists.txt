@@ -1,15 +1,36 @@
 set(HEADERS
+    textures.h
+    command_buffers.h
+    ubos.h
+    buffers.h
+    samplers.h
+    render_pass.h
+    vertex.h
+    vertex_buffers.h
+    index_buffers.h
     device.h
-    image.h
+    images.h
     window.h
+    pipelines.h
+    glm_includes.h
     swap_chain.h
     debug.h
     vulkan.h
     context.h)
 set(SOURCES
+    textures.cpp
+    command_buffers.cpp
+    ubos.cpp
+    buffers.cpp
+    samplers.cpp
+    render_pass.cpp
+    vertex.cpp
+    vertex_buffers.cpp
+    index_buffers.cpp
     device.cpp
-    image.cpp
+    images.cpp
     window.cpp
+    pipelines.cpp
     swap_chain.cpp
     debug.cpp
     vulkan.cpp

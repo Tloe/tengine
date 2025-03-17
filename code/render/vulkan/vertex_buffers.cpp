@@ -1,0 +1,45 @@
+#include "vertex_buffers.h"
+
+#include "ds_hashmap.h"
+#include "types.h"
+#include "vulkan/buffers.h"
+#include "vulkan/handles.h"
+
+#include <vulkan/vulkan_core.h>
+
+namespace {
+  ArenaHandle    mem_render_resource = arena::by_name("render_resources");
+  HashMap16<U32> vertex_counts       = hashmap::init16<U32>(mem_render_resource);
+}
+
+vulkan::VertexBufferHandle vulkan::vertex_buffers::create(const DynamicArray<Vertex>& vertices) {
+  VkDeviceSize byte_size = sizeof(vertices._data[0]) * vertices._size;
+
+  auto staging =
+      buffers::create(byte_size,
+                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  buffers::copy(staging, vertices._data, byte_size);
+
+  auto vertex_handle =
+      buffers::create(byte_size,
+                      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  buffers::copy(vertex_handle, staging, byte_size);
+
+  buffers::cleanup(staging);
+
+  hashmap::insert(vertex_counts, vertex_handle.value);
+
+  return VertexBufferHandle{.value = vertex_handle.value};
+}
+
+void vulkan::vertex_buffers::cleanup(VertexBufferHandle handle) {
+  buffers::cleanup(BufferHandle{.value = handle.value});
+}
+
+U32 vulkan::vertex_buffers::vertex_count(VertexBufferHandle handle) {
+  return *hashmap::value(vertex_counts, handle.value);
+}

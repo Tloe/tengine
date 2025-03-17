@@ -1,5 +1,4 @@
-#ifndef WINDOW_H
-#define WINDOW_H
+#pragma once
 
 #include "types.h"
 #include <SDL3/SDL_video.h>
@@ -13,4 +12,3 @@ namespace vulkan {
   }
 }
 
-#endif

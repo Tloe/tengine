@@ -1,18 +1,13 @@
-#ifndef SWAP_CHAIN_H
-#define SWAP_CHAIN_H
+#pragma once
 
 #include "ds_array_dynamic.h"
-#include "vulkan/image.h"
+#include "handles.h"
 
+#include <SDL3/SDL_video.h>
 #include <vulkan/vulkan_core.h>
 
-namespace mem { struct Arena; }
-namespace mem { typedef Arena* ArenaPtr; }
-namespace vulkan { struct Context; }
-namespace vulkan { typedef Context* ContextPtr; }
-
 namespace vulkan {
-  struct SwapChain {
+  extern struct SwapChain {
     VkSwapchainKHR swap_chain;
     VkFormat       image_format;
     VkExtent2D     extent;
@@ -20,28 +15,25 @@ namespace vulkan {
     ImageHandle depth;
     ImageHandle multisampling;
 
-    ds::DynamicArray<VkFramebuffer> frame_buffers;
-    ds::DynamicArray<ImageHandle>   image_handles;
-  };
-  typedef SwapChain* SwapChainPtr;
+    DynamicArray<VkFramebuffer> frame_buffers;
+    DynamicArray<ImageHandle>   image_handles;
+
+    SDL_Window*      window;
+    RenderPassHandle render_pass;
+  } _swap_chain;
 
   struct SwapChainSupport {
-    VkSurfaceCapabilitiesKHR             capabilities = {};
-    ds::DynamicArray<VkSurfaceFormatKHR> formats;
-    ds::DynamicArray<VkPresentModeKHR>   present_modes;
+    VkSurfaceCapabilitiesKHR         capabilities = {};
+    DynamicArray<VkSurfaceFormatKHR> formats;
+    DynamicArray<VkPresentModeKHR>   present_modes;
   };
 
   namespace swap_chain {
-    SwapChain create(ContextPtr ctx, mem::ArenaPtr a, SDL_Window* window);
-    void      cleanup(vulkan::ContextPtr ctx, SwapChainPtr swap_chain);
+    void create(RenderPassHandle render_pass,SDL_Window* window);
+    void cleanup();
+    void recreate();
 
-    void create_framebuffers(vulkan::ContextPtr   ctx,
-                             VkRenderPass         render_pass,
-                             vulkan::SwapChainPtr swap_chain);
-
-    SwapChainSupport
-    swap_chain_support(mem::Arena* perm, VkPhysicalDevice device, VkSurfaceKHR surface);
+    SwapChainSupport swap_chain_support(VkPhysicalDevice device, VkSurfaceKHR surface);
   }
 }
 
-#endif

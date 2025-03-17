@@ -1,5 +1,4 @@
-#ifndef DEBUG_H
-#define DEBUG_H
+#pragma once
 
 #include <vulkan/vulkan_core.h>
 
@@ -10,4 +9,3 @@ namespace vulkan::debug {
   VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info();
 }
 
-#endif

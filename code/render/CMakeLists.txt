@@ -3,12 +3,10 @@ add_library(render)
 set(HEADERS
     stb_image/stb_image.h
     tiny_obj_loader/tiny_obj_loader.h
-    vulkan/context.h
-    vertex_buffer.h
+    mesh.h
     render.h)
 set(SOURCES
-    vulkan/context.cpp
-    vertex_buffer.cpp
+    mesh.cpp
     render.cpp)
 
 find_package(glm REQUIRED)

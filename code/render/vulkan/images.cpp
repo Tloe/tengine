@@ -1,150 +1,151 @@
-#include "image.h"
+#include "images.h"
 
 #include "arena.h"
+#include "command_buffers.h"
+#include "context.h"
+#include "device.h"
 #include "ds_hashmap.h"
-#include "vulkan/context.h"
-#include "vulkan/device.h"
-#include "vulkan/vulkan.h"
+#include "vulkan.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <vulkan/vulkan_core.h>
 
 namespace {
-  struct Images {
-    ds::HashMap<U16, VkImage>        images;
-    ds::HashMap<U16, VkImageView>    views;
-    ds::HashMap<U16, VkDeviceMemory> memory;
-    ds::HashMap<U16, VkFormat>       formats;
-    ds::HashMap<U16, U32>            mip_levels;
-  } images;
+  ArenaHandle                     mem_render_resources = arena::by_name("render_resources");
+  HashMap16<VkImage>              vk_images = hashmap::init16<VkImage>(mem_render_resources);
+  HashMap16<VkImageView>          vk_views  = hashmap::init16<VkImageView>(mem_render_resources);
+  HashMap16<VkDeviceMemory>       vk_memory = hashmap::init16<VkDeviceMemory>(mem_render_resources);
+  HashMap16<VkFormat>             vk_formats = hashmap::init16<VkFormat>(mem_render_resources);
+  HashMap16<U32>                  mip_lvls   = hashmap::init16<U32>(mem_render_resources);
+  HashMap16<vulkan::images::Size> sizes =
+      hashmap::init16<vulkan::images::Size>(mem_render_resources);
 
-  vulkan::ContextPtr ctx;
-  U16                next_handle_value = 0;
+  U16 next_handle_value = 0;
 }
 
-void vulkan::image::init(ContextPtr ctx, mem::ArenaPtr a) {
-  images = Images{
-      .images     = ds::hashmap::init<U16, VkImage>(a),
-      .views      = ds::hashmap::init<U16, VkImageView>(a),
-      .memory     = ds::hashmap::init<U16, VkDeviceMemory>(a),
-      .formats    = ds::hashmap::init<U16, VkFormat>(a),
-      .mip_levels = ds::hashmap::init<U16, U32>(a),
-  };
-
-  ::ctx = ctx;
-}
-
-vulkan::ImageHandle vulkan::image::create(U32                   width,
-                                          U32                   height,
-                                          VkFormat              format,
-                                          VkImageTiling         tiling,
-                                          VkImageUsageFlags     usage,
-                                          VkMemoryPropertyFlags properties,
-                                          U32                   mip_levels,
-                                          VkSampleCountFlagBits num_samples) {
-  VkImageCreateInfo image_create_info{};
-  image_create_info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  image_create_info.imageType     = VK_IMAGE_TYPE_2D;
-  image_create_info.extent.width  = width;
-  image_create_info.extent.height = height;
-  image_create_info.extent.depth  = 1;
-  image_create_info.mipLevels     = mip_levels;
-  image_create_info.arrayLayers   = 1;
-  image_create_info.format        = format;
-  image_create_info.tiling        = tiling;
-  image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  image_create_info.usage         = usage;
-  image_create_info.samples       = num_samples;
-  image_create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+vulkan::ImageHandle vulkan::images::create(U16                   w,
+                                           U16                   h,
+                                           VkFormat              format,
+                                           VkImageTiling         tiling,
+                                           VkImageUsageFlags     usage,
+                                           VkMemoryPropertyFlags properties,
+                                           U32                   mip_levels,
+                                           VkSampleCountFlagBits num_samples) {
+  VkImageCreateInfo create_info{};
+  create_info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  create_info.imageType     = VK_IMAGE_TYPE_2D;
+  create_info.extent.width  = w;
+  create_info.extent.height = h;
+  create_info.extent.depth  = 1;
+  create_info.mipLevels     = mip_levels;
+  create_info.arrayLayers   = 1;
+  create_info.format        = format;
+  create_info.tiling        = tiling;
+  create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  create_info.usage         = usage;
+  create_info.samples       = num_samples;
+  create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
 
   ImageHandle handle{.value = next_handle_value++};
 
-  auto image = ds::hashmap::insert(images.images, handle.value, VkImage{});
+  auto image = hashmap::insert(vk_images, handle.value, VkImage{});
 
-  if (vkCreateImage(ctx->logical_device, &image_create_info, nullptr, image) != VK_SUCCESS) {
-    printf("failed to create image!");
-    exit(0);
-  }
+  ASSERT_SUCCESS("failed to create image!",
+                 vkCreateImage(vulkan::_ctx.logical_device, &create_info, nullptr, image));
 
   VkMemoryRequirements memory_requirements;
-  vkGetImageMemoryRequirements(ctx->logical_device, *image, &memory_requirements);
+  vkGetImageMemoryRequirements(vulkan::_ctx.logical_device, *image, &memory_requirements);
 
   VkMemoryAllocateInfo alloc_info{};
-  alloc_info.sType          = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  alloc_info.allocationSize = memory_requirements.size;
-  alloc_info.memoryTypeIndex =
-      device::memory_type(ctx->physical_device, memory_requirements.memoryTypeBits, properties);
+  alloc_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  alloc_info.allocationSize  = memory_requirements.size;
+  alloc_info.memoryTypeIndex = device::memory_type(vulkan::_ctx.physical_device,
+                                                   memory_requirements.memoryTypeBits,
+                                                   properties);
 
-  auto memory = ds::hashmap::insert(images.memory, handle.value, VkDeviceMemory{});
+  auto memory = hashmap::insert(vk_memory, handle.value, VkDeviceMemory{});
 
-  if (vkAllocateMemory(ctx->logical_device, &alloc_info, nullptr, memory) != VK_SUCCESS) {
-    printf("failed to allocate image memory!");
-    exit(0);
-  }
+  ASSERT_SUCCESS("failed to allocate image memory!",
+                 vkAllocateMemory(vulkan::_ctx.logical_device, &alloc_info, nullptr, memory));
 
-  vkBindImageMemory(ctx->logical_device, *image, *memory, 0);
+  vkBindImageMemory(vulkan::_ctx.logical_device, *image, *memory, 0);
 
-  ds::hashmap::insert(images.formats, handle.value, format);
-  ds::hashmap::insert(images.mip_levels, handle.value, mip_levels);
+  hashmap::insert(vk_formats, handle.value, format);
+  hashmap::insert(mip_lvls, handle.value, mip_levels);
+  hashmap::insert(sizes, handle.value, Size{w, h});
 
   return handle;
 }
 
-vulkan::ImageHandle vulkan::image::add(VkImage vk_image, VkFormat format, U32 mip_levels) {
+vulkan::ImageHandle vulkan::images::add(VkImage vk_image, VkFormat format, U32 mip_levels) {
   ImageHandle handle{.value = next_handle_value++};
 
-  ds::hashmap::insert(images.images, handle.value, vk_image);
-  ds::hashmap::insert(images.formats, handle.value, format);
-  ds::hashmap::insert(images.mip_levels, handle.value, mip_levels);
+  hashmap::insert(vk_images, handle.value, vk_image);
+  hashmap::insert(vk_formats, handle.value, format);
+  hashmap::insert(mip_lvls, handle.value, mip_levels);
 
   return handle;
 }
 
-void vulkan::image::cleanup(ImageHandle handle) {
-  auto view = image::view(handle);
-  if (view != nullptr) {
-    vkDestroyImageView(ctx->logical_device, *view, nullptr);
-    ds::hashmap::erase(images.views, handle.value);
+void vulkan::images::cleanup(ImageHandle handle) {
+  auto view = images::view(handle);
+  if (*view != VK_NULL_HANDLE) {
+    vkDestroyImageView(vulkan::_ctx.logical_device, *view, nullptr);
+    printf("VIEWS ERASE -------- %d\n", handle.value);
+    hashmap::erase(vk_views, handle.value);
   }
 
-  auto image = image::image(handle);
-  if (image != nullptr) {
-    vkDestroyImage(ctx->logical_device, *image, nullptr);
-    ds::hashmap::erase(images.images, handle.value);
+  auto image = images::image(handle);
+  if (*image != VK_NULL_HANDLE) {
+    vkDestroyImage(vulkan::_ctx.logical_device, *image, nullptr);
+    hashmap::erase(vk_images, handle.value);
   }
 
-  auto memory = ds::hashmap::value(images.memory, handle.value);
-  if (memory != nullptr) {
-    vkFreeMemory(ctx->logical_device, *memory, nullptr);
-    ds::hashmap::erase(images.memory, handle.value);
+  auto memory = hashmap::value(vk_memory, handle.value);
+  if (*memory != VK_NULL_HANDLE) {
+    vkFreeMemory(vulkan::_ctx.logical_device, *memory, nullptr);
+    hashmap::erase(vk_memory, handle.value);
   }
 }
 
-void vulkan::image::create_view(ImageHandle handle, VkImageAspectFlags aspect_flags) {
+void vulkan::images::create_view(ImageHandle handle, VkImageAspectFlags aspect_flags) {
   VkImageViewCreateInfo view_create_info{};
   view_create_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   view_create_info.image                           = *image(handle);
   view_create_info.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
   view_create_info.format                          = *format(handle);
+  view_create_info.components.r                    = VK_COMPONENT_SWIZZLE_R;
+  view_create_info.components.g                    = VK_COMPONENT_SWIZZLE_G;
+  view_create_info.components.b                    = VK_COMPONENT_SWIZZLE_B;
+  view_create_info.components.a                    = VK_COMPONENT_SWIZZLE_A;
   view_create_info.subresourceRange.aspectMask     = aspect_flags;
   view_create_info.subresourceRange.baseMipLevel   = 0;
   view_create_info.subresourceRange.levelCount     = *mip_levels(handle);
   view_create_info.subresourceRange.baseArrayLayer = 0;
   view_create_info.subresourceRange.layerCount     = 1;
 
-  auto view = ds::hashmap::insert(images.views, handle.value, VkImageView{});
+  printf("VIEWS CREATE +++++++++++ %d\n", handle.value);
+  auto view = hashmap::insert(vk_views, handle.value, VkImageView{});
 
-  if (vkCreateImageView(ctx->logical_device, &view_create_info, nullptr, view) != VK_SUCCESS) {
-    printf("failed to create texture image view!");
-    exit(0);
+  ASSERT_SUCCESS("failed to create texture image view!",
+                 vkCreateImageView(vulkan::_ctx.logical_device, &view_create_info, nullptr, view));
+}
+
+void vulkan::images::cleanup_view(ImageHandle handle) {
+  auto view = images::view(handle);
+  if (*view != VK_NULL_HANDLE) {
+    vkDestroyImageView(vulkan::_ctx.logical_device, *view, nullptr);
+    printf("VIEWS ERASE -------- %d\n", handle.value);
+    hashmap::erase(vk_views, handle.value);
   }
 }
 
-void vulkan::image::transition_layout(ImageHandle   handle,
-                                      VkImageLayout old_layout,
-                                      VkImageLayout new_layout) {
-  VkCommandBuffer command_buffer = vulkan::begin_single_time_commands(ctx);
+void vulkan::images::transition_layout(ImageHandle   handle,
+                                       VkImageLayout old_layout,
+                                       VkImageLayout new_layout) {
+  auto command_buffer = command_buffers::create();
+  command_buffers::begin(command_buffer);
 
   VkImageMemoryBarrier barrier{};
   barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -199,7 +200,7 @@ void vulkan::image::transition_layout(ImageHandle   handle,
     exit(0);
   }
 
-  vkCmdPipelineBarrier(command_buffer,
+  vkCmdPipelineBarrier(*vulkan::command_buffers::buffer(command_buffer),
                        source_stage,
                        destination_stage,
                        0,
@@ -210,12 +211,14 @@ void vulkan::image::transition_layout(ImageHandle   handle,
                        1,
                        &barrier);
 
-  vulkan::end_single_time_commands(ctx, command_buffer);
+  command_buffers::submit_and_cleanup(command_buffer);
 }
 
-void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
+void vulkan::images::generate_mipmaps(ImageHandle handle) {
   VkFormatProperties format_properties;
-  vkGetPhysicalDeviceFormatProperties(ctx->physical_device, *format(handle), &format_properties);
+  vkGetPhysicalDeviceFormatProperties(vulkan::_ctx.physical_device,
+                                      *format(handle),
+                                      &format_properties);
 
   if (!(format_properties.optimalTilingFeatures &
         VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
@@ -223,7 +226,8 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
     exit(0);
   }
 
-  VkCommandBuffer command_buffer = vulkan::begin_single_time_commands(ctx);
+  auto command_buffer    = command_buffers::create();
+  auto vk_command_buffer = command_buffers::begin(command_buffer);
 
   auto                 vk_image = *image(handle);
   VkImageMemoryBarrier barrier{};
@@ -236,8 +240,10 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
   barrier.subresourceRange.layerCount     = 1;
   barrier.subresourceRange.levelCount     = 1;
 
-  I32 mip_width  = w;
-  I32 mip_height = h;
+  auto size = hashmap::value(sizes, handle.value);
+
+  I32 mip_width  = size->w;
+  I32 mip_height = size->h;
 
   for (U32 i = 1; i < *mip_levels(handle); i++) {
     barrier.subresourceRange.baseMipLevel = i - 1;
@@ -246,7 +252,7 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
     barrier.srcAccessMask                 = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask                 = VK_ACCESS_TRANSFER_READ_BIT;
 
-    vkCmdPipelineBarrier(command_buffer,
+    vkCmdPipelineBarrier(*vk_command_buffer,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          0,
@@ -273,7 +279,7 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
     blit.dstSubresource.baseArrayLayer = 0;
     blit.dstSubresource.layerCount     = 1;
 
-    vkCmdBlitImage(command_buffer,
+    vkCmdBlitImage(*vk_command_buffer,
                    vk_image,
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    vk_image,
@@ -287,7 +293,7 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    vkCmdPipelineBarrier(command_buffer,
+    vkCmdPipelineBarrier(*vk_command_buffer,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          0,
@@ -297,6 +303,7 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
                          nullptr,
                          1,
                          &barrier);
+
     if (mip_width > 1) mip_width /= 2;
 
     if (mip_height > 1) mip_height /= 2;
@@ -308,7 +315,7 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
   barrier.srcAccessMask                 = VK_ACCESS_TRANSFER_WRITE_BIT;
   barrier.dstAccessMask                 = VK_ACCESS_SHADER_READ_BIT;
 
-  vkCmdPipelineBarrier(command_buffer,
+  vkCmdPipelineBarrier(*vk_command_buffer,
                        VK_PIPELINE_STAGE_TRANSFER_BIT,
                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                        0,
@@ -319,21 +326,26 @@ void vulkan::image::generate_mipmaps(ImageHandle handle, U32 w, U32 h) {
                        1,
                        &barrier);
 
-  vulkan::end_single_time_commands(ctx, command_buffer);
+  command_buffers::submit_and_cleanup(command_buffer);
 }
 
-VkImage* vulkan::image::image(ImageHandle handle) {
-  return ds::hashmap::value(images.images, handle.value);
+VkImage* vulkan::images::image(ImageHandle handle) {
+  return hashmap::value(vk_images, handle.value);
 }
 
-VkImageView* vulkan::image::view(ImageHandle handle) {
-  return ds::hashmap::value(images.views, handle.value);
+VkImageView* vulkan::images::view(ImageHandle handle) {
+  printf("get view handle: %d, %p\n", handle.value, (void*)*hashmap::value(vk_views, handle.value));
+  return hashmap::value(vk_views, handle.value);
 }
 
-VkFormat* vulkan::image::format(ImageHandle handle) {
-  return ds::hashmap::value(images.formats, handle.value);
+VkFormat* vulkan::images::format(ImageHandle handle) {
+  return hashmap::value(vk_formats, handle.value);
 }
 
-U32* vulkan::image::mip_levels(ImageHandle handle) {
-  return ds::hashmap::value(images.mip_levels, handle.value);
+U32* vulkan::images::mip_levels(ImageHandle handle) {
+  return hashmap::value(mip_lvls, handle.value);
+}
+
+vulkan::images::Size vulkan::images::size(ImageHandle handle) {
+  return *hashmap::value(sizes, handle.value);
 }
