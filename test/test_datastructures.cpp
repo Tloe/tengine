@@ -20,25 +20,60 @@ TEST_CASE("ds_string", "[DS_STRING]") {
 }
 
 TEST_CASE("ds_hashmap", "[DS_HASHMAP]") {
-  auto a = INIT_ARENA("hasmap_test", 1024);
+  auto a = INIT_ARENA("hasmap_test", 3000);
 
   auto hm = hashmap::init64<U64>(a);
 
-  hashmap::insert(hm, 42, 142);
-  hashmap::insert(hm, 52, 152);
-  hashmap::insert(hm, 62, 162);
-  hashmap::insert(hm, 72, 172);
-  hashmap::insert(hm, 82, 182);
+  hashmap::insert(hm, 0, 142);
+  hashmap::insert(hm, 1, 152);
+  hashmap::insert(hm, 2, 162);
+  hashmap::insert(hm, 3, 172);
+  hashmap::insert(hm, 4, 182);
+  hashmap::insert(hm, 5, 142);
+  hashmap::insert(hm, 6, 152);
+  hashmap::insert(hm, 7, 162);
+  hashmap::insert(hm, 8, 172);
+  hashmap::insert(hm, 9, 182);
+  hashmap::erase(hm, 5);
+  hashmap::erase(hm, 6);
+  hashmap::erase(hm, 7);
+  hashmap::erase(hm, 8);
+  hashmap::erase(hm, 9);
+  hashmap::insert(hm, 10, 182);
+  hashmap::insert(hm, 11, 182);
+  hashmap::insert(hm, 12, 182);
+  hashmap::insert(hm, 13, 182);
+  hashmap::insert(hm, 14, 182);
+  hashmap::insert(hm, 15, 182);
+  hashmap::insert(hm, 16, 182);
+  hashmap::insert(hm, 17, 182);
+  hashmap::insert(hm, 18, 182);
+  hashmap::insert(hm, 19, 182);
+  hashmap::insert(hm, 20, 182);
 
-  REQUIRE(hm._size == 5);
-  REQUIRE(hm._capacity == 8);
-  REQUIRE(*hashmap::value(hm, 62) == 162);
-  REQUIRE(hashmap::contains(hm, 42));
+  REQUIRE(hm._size == 16);
+  REQUIRE(hm._capacity == 32);
+  REQUIRE(*hashmap::value(hm, 0) == 142);
+  REQUIRE(*hashmap::value(hm, 1) == 152);
+  REQUIRE(*hashmap::value(hm, 2) == 162);
+  REQUIRE(*hashmap::value(hm, 3) == 172);
+  REQUIRE(*hashmap::value(hm, 4) == 182);
+  REQUIRE(*hashmap::value(hm, 10) == 182);
+  REQUIRE(*hashmap::value(hm, 11) == 182);
+  REQUIRE(*hashmap::value(hm, 12) == 182);
+  REQUIRE(*hashmap::value(hm, 13) == 182);
+  REQUIRE(*hashmap::value(hm, 14) == 182);
+  REQUIRE(*hashmap::value(hm, 15) == 182);
+  REQUIRE(*hashmap::value(hm, 16) == 182);
+  REQUIRE(*hashmap::value(hm, 17) == 182);
+  REQUIRE(*hashmap::value(hm, 18) == 182);
+  REQUIRE(*hashmap::value(hm, 19) == 182);
+  REQUIRE(*hashmap::value(hm, 20) == 182);
 
-  hashmap::erase(hm, 42);
+  hashmap::erase(hm, 424242);
 
-  REQUIRE(hm._size == 4);
-  REQUIRE(hm._capacity == 8);
+  REQUIRE(hm._size == 16);
+  REQUIRE(hm._capacity == 32);
   REQUIRE(hashmap::value(hm, 42) == nullptr);
   REQUIRE(!hashmap::contains(hm, 42));
 

@@ -91,9 +91,6 @@ namespace {
   }
 
   void create_framebuffers(vulkan::RenderPassHandle render_pass) {
-
-    printf("\n\ncreate_framebuffers() %d\n", vulkan::_swap_chain.frame_buffers._size);
-
     for (U32 i = 0; i < vulkan::_swap_chain.image_handles._size; i++) {
       VkImageView attachments[] = {
           *vulkan::images::view(vulkan::_swap_chain.multisampling),
@@ -111,17 +108,11 @@ namespace {
 
       vulkan::_swap_chain.frame_buffers._data[i] = VK_NULL_HANDLE;
 
-      printf("i is: %d\n", i);
-      printf("logical_device: %p\n", vulkan::_ctx.logical_device);
-      printf("swap_chain.frame_buffers[i] is: %p\n", vulkan::_swap_chain.frame_buffers._data[i]);
-
       ASSERT_SUCCESS("failed to create framebuffer!",
                      vkCreateFramebuffer(vulkan::_ctx.logical_device,
                                          &create_info,
                                          nullptr,
                                          &vulkan::_swap_chain.frame_buffers._data[i]));
-
-      printf("done\n");
     }
   }
 }
@@ -193,14 +184,11 @@ void vulkan::swap_chain::create(vulkan::RenderPassHandle render_pass, SDL_Window
                           &image_count,
                           nullptr);
 
-  printf("image_count: %d\n", image_count);
   VkImage images[image_count];
   vkGetSwapchainImagesKHR(vulkan::_ctx.logical_device,
                           _swap_chain.swap_chain,
                           &image_count,
                           images);
-
-  printf("image_count: %d\n", image_count);
 
   for (U32 i = 0; i < image_count; i++) {
     _swap_chain.image_handles._data[i] = vulkan::images::add(images[i], surface_format.format, 1);
@@ -210,10 +198,7 @@ void vulkan::swap_chain::create(vulkan::RenderPassHandle render_pass, SDL_Window
   _swap_chain.extent       = extent;
 
   for (U32 i = 0; i < image_count; i++) {
-    printf("create view: i: %d handle.value %d\n", i, _swap_chain.image_handles._data[i].value);
     vulkan::images::create_view(_swap_chain.image_handles._data[i], VK_IMAGE_ASPECT_COLOR_BIT);
-    printf("Color View: %p\n",
-           (void*)*vulkan::images::view(vulkan::_swap_chain.image_handles._data[i]));
   }
   create_framebuffers(render_pass);
 }

@@ -5,8 +5,8 @@
 #include "vulkan/handles.h"
 
 #include <SDL3/SDL_video.h>
-#include <vulkan/vulkan_core.h>
 #include <vulkan/glm_includes.h>
+#include <vulkan/vulkan_core.h>
 
 namespace render {
   struct Settings {
@@ -32,7 +32,8 @@ namespace render {
   /* void bind_texture(vulkan::TextureHandle texture); */
   void draw_mesh(MeshHandle mesh);
 
-  bool check_events(Renderer& renderer);
   void begin_frame(Renderer& renderer);
   void end_frame(Renderer& renderer);
+
+  void resize_framebuffers();
 }

@@ -17,6 +17,7 @@ SDL_Window *vulkan::window::init(U16 w, U16 h) {
     printf("failed to create SDL3 window: %s", SDL_GetError());
     exit(0);
   }
+  SDL_SetWindowResizable(window, true);
   return window;
 }
 

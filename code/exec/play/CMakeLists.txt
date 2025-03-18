@@ -5,10 +5,12 @@ target_link_libraries(play
     vulkan
   PRIVATE
     core
+    engine
     render)
 
 set_target_properties(play
       PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY
       "${PROJECT_SOURCE_DIR}/exec")
+
 

@@ -310,8 +310,8 @@ namespace hashmap {
 
   template <typename K, K empty_value, typename V, typename KVar>
   bool contains(const ::THashMap<K, empty_value, V>& hm, const KVar& kvar) {
-    U32 not_used;
-    return array_index(hm, static_cast<K>(kvar), not_used);
+    U32 out_not_used;
+    return array_index(hm, static_cast<K>(kvar), out_not_used);
   }
 
   template <typename K, K empty_value, typename V, typename KVar>
@@ -343,17 +343,24 @@ namespace hashmap {
 
   template <typename K, K empty_value, typename V, typename KVar>
   void erase(THashMap<K, empty_value, V>& hm, const KVar& kvar) {
-    K   k     = kvar;
-    U64 hash  = hm._hasher_fn(k);
-    U64 index = hash & (hm._capacity - 1);
-    for (;;) {
-      if (hm._data[index].k == k) {
-        hm._size--;
-        _remove(hm, index);
-        return;
-      }
-      index = (index + 1) & (hm._capacity - 1);
-    }
-  }
+    K k = kvar;
 
+    U32 index;
+    if (array_index(hm, k, index)) {
+      _remove(hm, index);
+    }
+
+    /*   U64 hash  = hm._hasher_fn(k); */
+    /*   U64 index = hash & (hm._capacity - 1); */
+    /*  */
+    /*   for (;;) { */
+    /*     if (hm._data[index].k == k) { */
+    /*       hm._size--; */
+    /*       _remove(hm, index); */
+    /*       return; */
+    /*     } */
+    /*     index = (index + 1) & (hm._capacity - 1); */
+    /*   } */
+    /* } */
+  }
 }

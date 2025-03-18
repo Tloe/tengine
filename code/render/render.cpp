@@ -159,26 +159,6 @@ void render::draw_mesh(MeshHandle mesh) {
   meshes::draw(*vulkan::command_buffers::buffer(frames[current_frame].command_buffer), mesh);
 }
 
-bool render::check_events(Renderer& renderer) {
-  bool quit = false;
-
-  SDL_Event e;
-  SDL_zero(e);
-  while (SDL_PollEvent(&e)) {
-    switch (e.type) {
-      case SDL_EVENT_QUIT: {
-        quit = true;
-        break;
-      }
-      case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
-        framebuffer_resized = true;
-      }
-    }
-  }
-
-  return quit;
-}
-
 void render::begin_frame(Renderer& renderer) {
   auto frame = &frames[current_frame];
 
@@ -280,3 +260,8 @@ void render::end_frame(Renderer& renderer) {
 
   vkDeviceWaitIdle(vulkan::_ctx.logical_device);
 }
+
+void render::resize_framebuffers() {
+  framebuffer_resized = true;
+}
+

@@ -1,5 +1,6 @@
 #include "arena.h"
 #include "ds_array_dynamic.h"
+#include "engine.h"
 #include "mesh.h"
 #include "render.h"
 #include "vulkan/handles.h"
@@ -13,6 +14,7 @@
 
 G_INIT_ARENA(render, 10000000);
 G_INIT_ARENA(render_resources, 100000);
+G_INIT_ARENA(ui, 100000);
 
 ArenaHandle mem_render_resource = arena::by_name("render_resources");
 
@@ -20,7 +22,7 @@ int main() {
   INIT_ARENA(frame0, 10000);
   INIT_ARENA(frame1, 10000);
 
-  auto renderer = render::init(render::Settings{
+  auto state = engine::init(render::Settings{
       .memory_init_scratch = 1000000,
       .max_frames          = 2,
       .max_textures        = 10,
@@ -37,7 +39,8 @@ int main() {
                                                {{1.0f, -1.0f, 0.0f}, {1.0f, 0.0f}},
                                                {{-1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
                                                {{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}}});
-  auto indices  = array::init<U32>(mem_render_resource, {0, 1, 2, 2, 1, 3});
+
+  auto indices = array::init<U32>(mem_render_resource, {0, 1, 2, 2, 1, 3});
 
   auto mesh = render::meshes::create(vertices, indices);
 
@@ -50,61 +53,43 @@ int main() {
   array::push_back(textures, texture);
   vulkan::ubos::set_textures(textures);
 
-  bool quit = false;
-
-  const U8  FPS         = 60;
-  const U16 frame_delay = 1000 / FPS;
-  U32       frame_start;
-  U32       frame_time;
-
   auto texture_data = array::init<U32>(arena::by_name("render"), 512 * 512, 512 * 512);
 
-  printf("texture_data._size %d", texture_data._size);
-
   U8 r = 1;
-  while (!quit) {
+  while (!state.quit) {
     r++;
-    r    = r % 255;
     U8 g = 1;
     U8 b = 1;
     U8 a = 255;
     for (U32 i = 0; i < 512; ++i) {
       for (U32 j = 0; j < 512; ++j) {
-        r                               = r / (j+1)  + j;
-        b                               = r - i / (j + 1);
+        r = r * (i / (j + 1));
+        /* b                               = r - i * (j + 1); */
         r                               = r % 255;
         b                               = b % 150;
         texture_data._data[i * 512 + j] = (U8(a) << 24) | (U8(b) << 16) | (U8(g) << 8) | U8(r);
       }
     }
 
-    frame_start = SDL_GetTicks();
-
-    quit = render::check_events(renderer);
-
     vulkan::textures::update_texture(texture, texture_data);
-
-    render::begin_frame(renderer);
 
     render::set_view_projection(view, proj);
 
     auto model = glm::mat4(1.0f);
+
     render::set_model(model);
 
     render::draw_mesh(mesh);
-    render::end_frame(renderer);
 
-    frame_time = SDL_GetTicks() - frame_start;
-    if (frame_delay > frame_time) {
-      SDL_Delay(frame_delay - frame_time);
-    }
+    engine::end_frame();
   }
-
+  
   vulkan::texture_samplers::cleanup(sampler);
   vulkan::textures::cleanup(texture);
   render::meshes::cleanup(mesh);
+    
+  engine::cleanup();
 
-  render::cleanup(renderer);
 
   return 0;
 }

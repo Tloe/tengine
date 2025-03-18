@@ -29,4 +29,3 @@ namespace string {
 
   char* c_str(const String& str);
 }
-

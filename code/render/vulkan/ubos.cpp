@@ -155,7 +155,6 @@ void vulkan::ubos::set_model_ubo(ModelUBO data) {
 }
 
 void vulkan::ubos::set_textures(DynamicArray<vulkan::TextureHandle> textures) {
-  printf("textures.size: %d\n", textures._size);
   VkDescriptorImageInfo image_infos[textures._size];
 
   for (U32 i = 0; i < textures._size; ++i) {

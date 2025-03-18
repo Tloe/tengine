@@ -5,10 +5,12 @@ target_link_libraries(fightspace
     vulkan
   PRIVATE
     core
-    render)
+    render
+    engine)
 
 set_target_properties(fightspace
       PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY
       "${PROJECT_SOURCE_DIR}/exec")
+
 

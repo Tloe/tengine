@@ -91,7 +91,6 @@ vulkan::TextureHandle vulkan::textures::create_with_staging(U32 w, U32 h) {
 
   auto command_buffer = command_buffers::create();
   hashmap::insert(staging_command_buffers, texture_image_handle.value, command_buffer);
-  printf("create staging command_buffer %d\n", command_buffer.value);
 
   return TextureHandle{.value = texture_image_handle.value};
 }

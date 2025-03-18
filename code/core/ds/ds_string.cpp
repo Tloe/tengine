@@ -2,6 +2,7 @@
 
 #include "arena.h"
 
+#include <cstdio>
 #include <cstring>
 
 String string::init(ArenaHandle arena_handle) {
@@ -119,6 +120,7 @@ String& operator+=(String& lhs, const char* rhs) {
   char* new_data = arena::alloc<char>(lhs._arena_handle, lhs._size + rhs_size + 1);
   memcpy(new_data, lhs._data, lhs._size);
   strcpy(new_data + lhs._size, rhs);
+  lhs._data = new_data;
   lhs._size += rhs_size;
 
   return lhs;

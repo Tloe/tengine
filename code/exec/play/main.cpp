@@ -1,7 +1,9 @@
 #include "arena.h"
 #include "ds_array_dynamic.h"
 #include "mesh.h"
+#include "engine.h"
 #include "render.h"
+#include "types.h"
 #include "vulkan/handles.h"
 #include "vulkan/images.h"
 #include "vulkan/samplers.h"
@@ -18,7 +20,7 @@ int main() {
   INIT_ARENA(frame0, 10000);
   INIT_ARENA(frame1, 10000);
 
-  auto renderer = render::init(render::Settings{
+  auto state = engine::init(render::Settings{
       .memory_init_scratch = 1000000,
       .max_frames          = 2,
       .max_textures        = 10,
@@ -47,25 +49,19 @@ int main() {
   vulkan::ubos::set_textures(
       array::init<vulkan::TextureHandle>(arena::by_name("render"), {viking_texture}));
 
-  U64 previous_time = SDL_GetPerformanceCounter();
-  F64 dt            = 0.0;
 
   float rotation_angle = 0.0f;
 
-  bool quit = false;
-  while (!quit) {
-    Uint64 current_time = SDL_GetPerformanceCounter();
-    dt                  = (double)(current_time - previous_time) / SDL_GetPerformanceFrequency();
-    previous_time       = current_time;
+  while (!state.quit) {
+    engine::begin_frame();
 
-    quit = render::check_events(renderer);
     render::begin_frame(renderer);
 
     render::set_view_projection(view, proj);
 
-    rotation_angle += glm::radians(90.0f) * dt;
-    if (rotation_angle > glm::two_pi<float>()) {
-      rotation_angle -= glm::two_pi<float>();
+    rotation_angle += glm::radians(90.0f) * state.dt;
+    if (rotation_angle > glm::two_pi<F32>()) {
+      rotation_angle -= glm::two_pi<F32>();
     }
 
     auto model = glm::rotate(glm::mat4(1.0f), rotation_angle, glm::vec3(0.0f, 0.0f, 1.0f));
@@ -73,6 +69,8 @@ int main() {
 
     render::draw_mesh(viking_mesh);
     render::end_frame(renderer);
+
+    engine::begin_frame();
   }
 
   vulkan::texture_samplers::cleanup(sampler);

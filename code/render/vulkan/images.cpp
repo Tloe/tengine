@@ -92,7 +92,6 @@ void vulkan::images::cleanup(ImageHandle handle) {
   auto view = images::view(handle);
   if (*view != VK_NULL_HANDLE) {
     vkDestroyImageView(vulkan::_ctx.logical_device, *view, nullptr);
-    printf("VIEWS ERASE -------- %d\n", handle.value);
     hashmap::erase(vk_views, handle.value);
   }
 
@@ -125,7 +124,6 @@ void vulkan::images::create_view(ImageHandle handle, VkImageAspectFlags aspect_f
   view_create_info.subresourceRange.baseArrayLayer = 0;
   view_create_info.subresourceRange.layerCount     = 1;
 
-  printf("VIEWS CREATE +++++++++++ %d\n", handle.value);
   auto view = hashmap::insert(vk_views, handle.value, VkImageView{});
 
   ASSERT_SUCCESS("failed to create texture image view!",
@@ -136,7 +134,6 @@ void vulkan::images::cleanup_view(ImageHandle handle) {
   auto view = images::view(handle);
   if (*view != VK_NULL_HANDLE) {
     vkDestroyImageView(vulkan::_ctx.logical_device, *view, nullptr);
-    printf("VIEWS ERASE -------- %d\n", handle.value);
     hashmap::erase(vk_views, handle.value);
   }
 }
@@ -334,7 +331,6 @@ VkImage* vulkan::images::image(ImageHandle handle) {
 }
 
 VkImageView* vulkan::images::view(ImageHandle handle) {
-  printf("get view handle: %d, %p\n", handle.value, (void*)*hashmap::value(vk_views, handle.value));
   return hashmap::value(vk_views, handle.value);
 }
 
