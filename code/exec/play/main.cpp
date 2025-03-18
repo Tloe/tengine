@@ -55,8 +55,6 @@ int main() {
   while (!state.quit) {
     engine::begin_frame();
 
-    render::begin_frame(renderer);
-
     render::set_view_projection(view, proj);
 
     rotation_angle += glm::radians(90.0f) * state.dt;
@@ -68,16 +66,14 @@ int main() {
     render::set_model(model);
 
     render::draw_mesh(viking_mesh);
-    render::end_frame(renderer);
 
-    engine::begin_frame();
+    engine::end_frame();
   }
 
   vulkan::texture_samplers::cleanup(sampler);
   vulkan::textures::cleanup(viking_texture);
   render::meshes::cleanup(viking_mesh);
 
-  render::cleanup(renderer);
-
+  engine::cleanup();
   return 0;
 }
