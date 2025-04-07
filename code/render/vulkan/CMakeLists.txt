@@ -10,7 +10,6 @@ set(HEADERS
     index_buffers.h
     device.h
     images.h
-    window.h
     pipelines.h
     glm_includes.h
     swap_chain.h
@@ -24,12 +23,10 @@ set(SOURCES
     buffers.cpp
     samplers.cpp
     render_pass.cpp
-    vertex.cpp
     vertex_buffers.cpp
     index_buffers.cpp
     device.cpp
     images.cpp
-    window.cpp
     pipelines.cpp
     swap_chain.cpp
     debug.cpp

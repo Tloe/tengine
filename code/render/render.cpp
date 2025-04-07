@@ -1,8 +1,10 @@
 #include "render.h"
 
 #include "arena.h"
+#include "ds_array_dynamic.h"
 #include "handles.h"
-#include "mesh.h"
+#include "meshes.h"
+#include "ui.h"
 #include "vulkan/command_buffers.h"
 #include "vulkan/context.h"
 #include "vulkan/handles.h"
@@ -10,16 +12,10 @@
 #include "vulkan/render_pass.h"
 #include "vulkan/swap_chain.h"
 #include "vulkan/ubos.h"
-#include "vulkan/vertex.h"
 #include "vulkan/vulkan.h"
-#include "vulkan/window.h"
 
-#include <SDL3/SDL_error.h>
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_init.h>
-#include <SDL3/SDL_oldnames.h>
-#include <SDL3/SDL_video.h>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vulkan/vulkan_core.h>
@@ -30,8 +26,9 @@ namespace {
 #else
   const bool debug = true;
 #endif
-  bool                   framebuffer_resized = false;
-  vulkan::PipelineHandle pipeline;
+  bool framebuffer_resized = false;
+
+  vulkan::RenderPassHandle render_pass;
 
   const U32 MAX_FRAMES_IN_FLIGHT = 2;
   U32       current_frame        = 0;
@@ -89,61 +86,60 @@ namespace {
   }
 }
 
-render::Renderer render::init(Settings settings) {
+void render::init(Settings settings, SDL_Window* sdl_window) {
   SET_SCRATCH(settings.memory_init_scratch);
 
-  Renderer renderer;
-  renderer.window = vulkan::window::init(settings.width, settings.height);
-
-  vulkan::context::init(renderer.window, debug);
+  vulkan::context::init(sdl_window, debug);
 
   vulkan::command_buffers::init();
 
-  renderer.render_pass = vulkan::render_pass::create();
+  render_pass = vulkan::render_pass::create();
 
-  vulkan::swap_chain::create(renderer.render_pass, renderer.window);
+  vulkan::swap_chain::create(render_pass, sdl_window);
 
   vulkan::ubos::init(settings.max_textures);
 
-  pipeline = vulkan::pipelines::create(vulkan::pipelines::Settings{
-      .vertex_shader_fpath    = "vert.spv",
-      .fragment_shader_fpath  = "frag.spv",
-      .binding_description    = vulkan::vertex::binding_description(),
-      .attribute_descriptions = vulkan::vertex::attribute_descriptions(),
-      .render_pass            = renderer.render_pass,
-  });
+  for (U32 i = 0; i < settings.pipeline_settings_count; ++i) {
+    vulkan::pipelines::create(settings.pipeline_settings[i], render_pass);
+  }
+
+  ui::init(sdl_window, render_pass);
 
   init_frames();
 
   arena::reset(arena::scratch());
-
-  return renderer;
 }
 
-void render::cleanup(render::Renderer& renderer) {
+void render::cleanup() {
   vulkan::swap_chain::cleanup();
 
   cleanup_frames();
 
   vulkan::ubos::cleanup();
-  vulkan::pipelines::cleanup(pipeline);
 
-  vulkan::render_pass::cleanup(renderer.render_pass);
+  vulkan::pipelines::cleanup();
+
+  vulkan::render_pass::cleanup(render_pass);
 
   vulkan::command_buffers::cleanup();
   vulkan::context::cleanup(debug);
-  vulkan::window::cleanup(renderer.window);
-
-  SDL_Quit();
 }
+
+void
+render::bind_pipeline(vulkan::PipelineHandle pipeline) {
+  auto frame = &frames[current_frame];
+
+  vulkan::pipelines::bind(pipeline, frame->command_buffer);
+  vulkan::ubos::bind_global_ubo(frame->command_buffer, pipeline);
+  vulkan::ubos::bind_model_ubo(frame->command_buffer, pipeline); 
+  vulkan::ubos::bind_textures(frame->command_buffer, pipeline); 
+} 
 
 void render::set_view_projection(glm::mat4& view, glm::mat4& proj) {
   vulkan::ubos::set_global_ubo(vulkan::ubos::GlobalUBO{
       .view = view,
       .proj = proj,
   });
-
-  vulkan::ubos::bind_global_ubo(frames[current_frame].command_buffer, pipeline);
 }
 
 void render::set_model(glm::mat4& model) {
@@ -151,15 +147,13 @@ void render::set_model(glm::mat4& model) {
       .model         = model,
       .texture_index = 0,
   });
-
-  vulkan::ubos::bind_model_ubo(frames[current_frame].command_buffer, pipeline);
 }
 
 void render::draw_mesh(MeshHandle mesh) {
-  meshes::draw(*vulkan::command_buffers::buffer(frames[current_frame].command_buffer), mesh);
+  meshes::draw(frames[current_frame].command_buffer, mesh);
 }
 
-void render::begin_frame(Renderer& renderer) {
+void render::begin_frame() {
   auto frame = &frames[current_frame];
 
   vkWaitForFences(vulkan::_ctx.logical_device, 1, &frame->in_flight_fence, VK_TRUE, UINT64_MAX);
@@ -187,31 +181,31 @@ void render::begin_frame(Renderer& renderer) {
 
   auto vk_command_buffer = *vulkan::command_buffers::begin(frame->command_buffer);
 
-  vulkan::render_pass::begin(renderer.render_pass,
+  vulkan::render_pass::begin(render_pass,
                              frame->command_buffer,
                              vulkan::_swap_chain.frame_buffers._data[frame->vk_image_index]);
 
-  vulkan::pipelines::bind(pipeline, frame->command_buffer);
-
-  VkViewport viewport{};
-  viewport.x        = 0.0f;
-  viewport.y        = 0.0f;
-  viewport.width    = static_cast<F32>(vulkan::_swap_chain.extent.width);
-  viewport.height   = static_cast<F32>(vulkan::_swap_chain.extent.height);
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
+  VkViewport viewport{
+      .x        = 0.0f,
+      .y        = 0.0f,
+      .width    = static_cast<F32>(vulkan::_swap_chain.extent.width),
+      .height   = static_cast<F32>(vulkan::_swap_chain.extent.height),
+      .minDepth = 0.0f,
+      .maxDepth = 1.0f,
+  };
   vkCmdSetViewport(vk_command_buffer, 0, 1, &viewport);
 
-  VkRect2D scissor{};
-  scissor.offset = {0, 0};
-  scissor.extent = vulkan::_swap_chain.extent;
+  VkRect2D scissor{
+      .offset = {0, 0},
+      .extent = vulkan::_swap_chain.extent,
+  };
   vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
-
-  vulkan::ubos::bind_textures(frame->command_buffer, pipeline);
 }
 
-void render::end_frame(Renderer& renderer) {
+void render::end_frame() {
   auto frame = &frames[current_frame];
+
+  ui::draw_frame(frame->command_buffer);
 
   vulkan::render_pass::end(frame->command_buffer);
 
@@ -232,8 +226,9 @@ void render::end_frame(Renderer& renderer) {
   submit_info.signalSemaphoreCount = 1;
   submit_info.pSignalSemaphores    = signal_semaphores;
 
-  ASSERT_SUCCESS("failed to submit draw command buffer!",
-                 vkQueueSubmit(vulkan::_ctx.graphics_queue, 1, &submit_info, frame->in_flight_fence));
+  ASSERT_SUCCESS(
+      "failed to submit draw command buffer!",
+      vkQueueSubmit(vulkan::_ctx.graphics_queue, 1, &submit_info, frame->in_flight_fence));
 
   VkSwapchainKHR swap_chains[] = {vulkan::_swap_chain.swap_chain};
 
@@ -244,7 +239,7 @@ void render::end_frame(Renderer& renderer) {
   present_info.swapchainCount     = 1;
   present_info.pSwapchains        = swap_chains;
   present_info.pImageIndices      = &frame->vk_image_index;
-  present_info.pResults           = nullptr; // Optional
+  present_info.pResults           = nullptr;
 
   auto result = vkQueuePresentKHR(vulkan::_ctx.present_queue, &present_info);
 
@@ -259,9 +254,8 @@ void render::end_frame(Renderer& renderer) {
   current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 
   vkDeviceWaitIdle(vulkan::_ctx.logical_device);
+
+  ui::cleanup_frame();
 }
 
-void render::resize_framebuffers() {
-  framebuffer_resized = true;
-}
-
+void render::resize_framebuffers() { framebuffer_resized = true; }

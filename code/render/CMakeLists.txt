@@ -3,10 +3,14 @@ add_library(render)
 set(HEADERS
     stb_image/stb_image.h
     tiny_obj_loader/tiny_obj_loader.h
-    mesh.h
+    textures.h
+    meshes.h
+    ui.h
     render.h)
 set(SOURCES
-    mesh.cpp
+    textures.cpp
+    meshes.cpp
+    ui.cpp
     render.cpp)
 
 find_package(glm REQUIRED)

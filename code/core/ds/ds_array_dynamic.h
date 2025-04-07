@@ -22,7 +22,7 @@ namespace array {
   template <typename T>
   DynamicArray<T> init(ArenaHandle a, const T* beg, const T* end);
   template <typename T>
-  DynamicArray<T> init(ArenaHandle arena_handle, std::initializer_list<T> ilist);
+  DynamicArray<T> init(ArenaHandle a, std::initializer_list<T> ilist);
   template <typename T>
   void reserve(DynamicArray<T>& da, U32 new_capacity);
   template <typename T>
@@ -43,26 +43,26 @@ namespace array {
 
 namespace array {
   template <typename T>
-  DynamicArray<T> init(ArenaHandle arena_handle, U32 capacity, U32 size) {
+  DynamicArray<T> init(ArenaHandle a, U32 capacity, U32 size) {
     assert(size <= capacity && "init size is larger than capacity");
     DynamicArray<T> da{
         ._size         = size,
         ._capacity     = capacity,
-        ._data         = arena::alloc<T>(arena_handle, sizeof(T) * capacity),
-        ._arena_handle = arena_handle,
+        ._data         = arena::alloc<T>(a, sizeof(T) * capacity),
+        ._arena_handle = a,
     };
 
     return da;
   }
 
   template <typename T>
-  DynamicArray<T> init(ArenaHandle arena_handle, const T* beg, const T* end) {
+  DynamicArray<T> init(ArenaHandle a, const T* beg, const T* end) {
     U32             size = static_cast<U32>(end - beg);
     DynamicArray<T> da{
         ._size         = size,
         ._capacity     = size,
-        ._data         = arena::alloc<T>(arena_handle, sizeof(T) * size),
-        ._arena_handle = arena_handle,
+        ._data         = arena::alloc<T>(a, sizeof(T) * size),
+        ._arena_handle = a,
     };
 
     memcpy(da._data, beg, sizeof(T) * size);
@@ -70,14 +70,14 @@ namespace array {
   }
 
   template <typename T>
-  DynamicArray<T> init(ArenaHandle arena_handle, std::initializer_list<T> ilist) {
+  DynamicArray<T> init(ArenaHandle a, std::initializer_list<T> ilist) {
     U32 size = static_cast<U32>(ilist.size());
 
-    DynamicArray<T> da {
-      ._size = size,
-      ._capacity = size,
-      ._data = arena::alloc<T>(arena_handle, sizeof(T) * size),
-      ._arena_handle = arena_handle,
+    DynamicArray<T> da{
+        ._size         = size,
+        ._capacity     = size,
+        ._data         = arena::alloc<T>(a, sizeof(T) * size),
+        ._arena_handle = a,
     };
 
     memcpy(da._data, ilist.begin(), sizeof(T) * size);

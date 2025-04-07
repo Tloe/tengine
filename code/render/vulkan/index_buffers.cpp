@@ -22,17 +22,17 @@ vulkan::IndexBufferHandle vulkan::index_buffers::create(const DynamicArray<U32>&
 
   buffers::copy(staging, indices._data, byte_size);
 
-  auto index_handle =
+  auto index_buffer =
       buffers::create(byte_size,
                       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-  buffers::copy(index_handle, staging, byte_size);
+  buffers::copy(index_buffer, staging, byte_size);
   buffers::cleanup(staging);
 
-  hashmap::insert(::sizes, index_handle.value, indices._size);
+  hashmap::insert(::sizes, index_buffer.value, indices._size);
 
-  return IndexBufferHandle{.value = index_handle.value};
+  return IndexBufferHandle{.value = index_buffer.value};
 }
 
 void vulkan::index_buffers::cleanup(IndexBufferHandle handle) {

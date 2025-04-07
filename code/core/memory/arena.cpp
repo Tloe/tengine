@@ -10,6 +10,13 @@
 
 namespace {
   const U8 MAX_ARENA_COUNT = U8_MAX;
+  const U8 NUM_FRAMES      = 2;
+  U8       _current_frame  = 0;
+
+  ArenaHandle _frames[2] = {
+      arena::by_name("frame0"),
+      arena::by_name("frame1"),
+  };
 
   struct {
     const char* name = "";
@@ -72,9 +79,19 @@ ArenaHandle arena::by_name(const char* name) {
   assert(false && "ran out of arena allocators!");
 }
 
-U8* arena::alloc(ArenaHandle handle, U32 size, U8 align) {
-  assert(_arenas[handle.value].a.buf_len != 0 && "this arena has not been set up");
+ArenaHandle arena::frame() { return _frames[_current_frame]; }
 
+void arena::next_frame() {
+  ++_current_frame;
+  _current_frame %= NUM_FRAMES;
+  reset(_frames[_current_frame]);
+}
+
+U8* arena::alloc(ArenaHandle handle, U32 size, U8 align) {
+  if (_arenas[handle.value].a.buf_len == 0) {
+    printf("arena '%s' has not been set up", _arenas[handle.value].name);
+    exit(0);
+  }
   auto a = &_arenas[handle.value].a;
 
   auto curr_ptr = a->buf + a->curr_offset;

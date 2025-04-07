@@ -9,7 +9,6 @@
 #include "swap_chain.h"
 #include "vulkan.h"
 
-#include <SDL3/SDL_video.h>
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
 #include <cstdlib>
@@ -117,10 +116,9 @@ namespace {
     descriptor_indexing_features.runtimeDescriptorArray                    = VK_TRUE;
 
     VkPhysicalDeviceFeatures2 device_features2{};
-    device_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    device_features2.sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     device_features2.features = device_features;
-    device_features2.pNext = &descriptor_indexing_features;
-
+    device_features2.pNext    = &descriptor_indexing_features;
 
     VkDeviceCreateInfo create_info{};
     create_info.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -254,7 +252,8 @@ void vulkan::context::cleanup(bool debug) {
     vulkan::debug::cleanup(vulkan::_ctx.instance);
   }
 
-  vkDestroySurfaceKHR(vulkan::_ctx.instance, vulkan::_ctx.surface, nullptr);
+  SDL_Vulkan_DestroySurface(vulkan::_ctx.instance, vulkan::_ctx.surface, nullptr);
+
   vkDestroyInstance(vulkan::_ctx.instance, nullptr);
 }
 

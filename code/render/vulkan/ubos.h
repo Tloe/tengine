@@ -17,7 +17,7 @@ namespace vulkan {
 
     struct ModelUBO {
       glm::mat4 model;
-      U32 texture_index;
+      U32       texture_index;
     };
 
     struct PushConstants {
@@ -31,14 +31,12 @@ namespace vulkan {
     void set_model_ubo(ModelUBO data);
     void set_textures(DynamicArray<vulkan::TextureHandle> textures);
 
-    void bind_global_ubo(CommandBufferHandle cmds, PipelineHandle pipeline);
-    void bind_model_ubo(CommandBufferHandle cmds, PipelineHandle pipeline);
-    void bind_textures(CommandBufferHandle cmds, PipelineHandle pipeline);
+    void bind_global_ubo(CommandBufferHandle command_buffer, PipelineHandle pipeline);
+    void bind_model_ubo(CommandBufferHandle command_buffer, PipelineHandle pipeline);
+    void bind_textures(CommandBufferHandle command_buffer, PipelineHandle pipeline);
 
     VkDescriptorSetLayout global_ubo_layout();
     VkDescriptorSetLayout model_ubo_layout();
     VkDescriptorSetLayout textures_ubo_layout();
-
-    /* void push_constants(CommandBufferHandle cmds, PipelineHandle pipeline, PushConstants constants); */
   }
 }

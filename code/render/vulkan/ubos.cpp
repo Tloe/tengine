@@ -159,7 +159,7 @@ void vulkan::ubos::set_textures(DynamicArray<vulkan::TextureHandle> textures) {
 
   for (U32 i = 0; i < textures._size; ++i) {
     image_infos[i].imageView   = *images::view(textures._data[i]);
-    image_infos[i].sampler     = *texture_samplers::sampler(textures::sampler(textures._data[i]));
+    image_infos[i].sampler     = *samplers::sampler(textures::sampler(textures._data[i]));
     image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   }
 
@@ -174,8 +174,8 @@ void vulkan::ubos::set_textures(DynamicArray<vulkan::TextureHandle> textures) {
   vkUpdateDescriptorSets(vulkan::_ctx.logical_device, 1, &texture_write, 0, nullptr);
 }
 
-void vulkan::ubos::bind_global_ubo(CommandBufferHandle cmds, PipelineHandle pipeline) {
-  vkCmdBindDescriptorSets(*command_buffers::buffer(cmds),
+void vulkan::ubos::bind_global_ubo(CommandBufferHandle command_buffer, PipelineHandle pipeline) {
+  vkCmdBindDescriptorSets(*command_buffers::buffer(command_buffer),
                           VK_PIPELINE_BIND_POINT_GRAPHICS,
                           *pipelines::layout(pipeline),
                           0,
@@ -185,8 +185,8 @@ void vulkan::ubos::bind_global_ubo(CommandBufferHandle cmds, PipelineHandle pipe
                           nullptr);
 }
 
-void vulkan::ubos::bind_model_ubo(CommandBufferHandle cmds, PipelineHandle pipeline) {
-  vkCmdBindDescriptorSets(*command_buffers::buffer(cmds),
+void vulkan::ubos::bind_model_ubo(CommandBufferHandle command_buffer, PipelineHandle pipeline) {
+  vkCmdBindDescriptorSets(*command_buffers::buffer(command_buffer),
                           VK_PIPELINE_BIND_POINT_GRAPHICS,
                           *pipelines::layout(pipeline),
                           1,
@@ -196,8 +196,8 @@ void vulkan::ubos::bind_model_ubo(CommandBufferHandle cmds, PipelineHandle pipel
                           nullptr);
 }
 
-void vulkan::ubos::bind_textures(CommandBufferHandle cmds, PipelineHandle pipeline) {
-  vkCmdBindDescriptorSets(*command_buffers::buffer(cmds),
+void vulkan::ubos::bind_textures(CommandBufferHandle command_buffer, PipelineHandle pipeline) {
+  vkCmdBindDescriptorSets(*command_buffers::buffer(command_buffer),
                           VK_PIPELINE_BIND_POINT_GRAPHICS,
                           *pipelines::layout(pipeline),
                           2,
@@ -212,14 +212,3 @@ VkDescriptorSetLayout vulkan::ubos::global_ubo_layout() { return layouts[UBOS::G
 VkDescriptorSetLayout vulkan::ubos::model_ubo_layout() { return layouts[UBOS::MODEL_UBO]; }
 
 VkDescriptorSetLayout vulkan::ubos::textures_ubo_layout() { return layouts[UBOS::TEXTURE_UBO]; }
-
-/* void vulkan::ubos::push_constants(CommandBufferHandle cmds, */
-/*                                   PipelineHandle      pipeline, */
-/*                                   PushConstants       constants) { */
-/*   vkCmdPushConstants(*command_buffers::buffer(cmds), */
-/*                      *pipelines::layout(pipeline), */
-/*                      VK_SHADER_STAGE_FRAGMENT_BIT, */
-/*                      0, */
-/*                      sizeof(PushConstants), */
-/*                      &constants); */
-/* } */

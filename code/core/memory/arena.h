@@ -5,16 +5,16 @@
 
 #include <cstddef>
 
-#define G_INIT_ARENA(NAME, SIZE)                                                                   \
-  uint8_t     memory_##NAME##_##__LINE__[SIZE];                                                    \
+#define INIT_ARENA(NAME, SIZE)                                                                     \
+  U8          memory_##NAME##_##__LINE__[SIZE];                                                    \
   ArenaHandle a_##NAME##_##__LINE__ = arena::set(#NAME, memory_##NAME##_##__LINE__, SIZE);
 
-#define INIT_ARENA(NAME, SIZE)                                                                     \
-  ({                                                                                               \
-    U8          memory[SIZE];                                                                      \
-    ArenaHandle a = arena::set(#NAME, memory, SIZE);                                               \
-    a;                                                                                             \
-  })
+/* #define INIT_ARENA(NAME, SIZE) \ */
+/*   ({ \ */
+/*     U8          memory[SIZE]; \ */
+/*     ArenaHandle a = arena::set(#NAME, memory, SIZE); \ */
+/*     a; \ */
+/*   }) */
 
 #define SET_SCRATCH(SIZE)                                                                          \
   ({                                                                                               \
@@ -37,6 +37,9 @@ namespace arena {
 
   ArenaHandle        by_name(const char* name);
   inline ArenaHandle scratch() { return ArenaHandle{.value = 0}; };
+
+  ArenaHandle frame();
+  void        next_frame();
 
   U8*  alloc(ArenaHandle handle, U32 size, U8 align = DEFAULT_ALIGNMENT);
   U8*  resize(ArenaHandle handle,

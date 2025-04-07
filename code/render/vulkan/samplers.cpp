@@ -6,6 +6,7 @@
 #include "vulkan/handles.h"
 #include "vulkan/vulkan.h"
 
+#include <cstdio>
 #include <vulkan/vulkan_core.h>
 
 namespace {
@@ -14,7 +15,7 @@ namespace {
   U16                  next_handle          = 0;
 }
 
-vulkan::TextureSamplerHandle vulkan::texture_samplers::create(U32 mip_levels) {
+vulkan::TextureSamplerHandle vulkan::samplers::create(U32 mip_levels) {
   auto properties = vulkan::device::properties(vulkan::_ctx.physical_device);
 
   VkSamplerCreateInfo sampler_info{};
@@ -47,10 +48,10 @@ vulkan::TextureSamplerHandle vulkan::texture_samplers::create(U32 mip_levels) {
   return handle;
 }
 
-void vulkan::texture_samplers::cleanup(TextureSamplerHandle handle) {
+void vulkan::samplers::cleanup(TextureSamplerHandle handle) {
   vkDestroySampler(vulkan::_ctx.logical_device, *hashmap::value(::samplers, handle.value), nullptr);
 }
 
-VkSampler* vulkan::texture_samplers::sampler(vulkan::TextureSamplerHandle handle) {
+VkSampler* vulkan::samplers::sampler(vulkan::TextureSamplerHandle handle) {
   return hashmap::value(::samplers, handle.value);
 }

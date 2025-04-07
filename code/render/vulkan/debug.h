@@ -8,4 +8,3 @@ namespace vulkan::debug {
 
   VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info();
 }
-

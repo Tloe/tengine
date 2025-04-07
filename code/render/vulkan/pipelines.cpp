@@ -15,10 +15,9 @@
 #include <vulkan/vulkan_core.h>
 
 namespace {
-  ArenaHandle                 mem_render        = arena::by_name("render");
-  HashMap16<VkPipeline>       pipelines         = hashmap::init16<VkPipeline>(mem_render);
-  HashMap16<VkPipelineLayout> layouts           = hashmap::init16<VkPipelineLayout>(mem_render);
-  U16                         next_handle_value = 0;
+  ArenaHandle                 mem_render = arena::by_name("render");
+  auto                        _pipelines = hashmap::init64<VkPipeline>(mem_render);
+  HashMap16<VkPipelineLayout> layouts    = hashmap::init16<VkPipelineLayout>(mem_render);
 
   VkShaderModule create_shader_module(const char* fpath) {
     auto code = read_file(arena::scratch(), fpath);
@@ -26,19 +25,19 @@ namespace {
     VkShaderModuleCreateInfo create_info{};
     create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     create_info.codeSize = code._size;
-    create_info.pCode    = reinterpret_cast<const uint32_t*>(code._data);
+    create_info.pCode    = reinterpret_cast<const U32*>(code._data);
 
-    VkShaderModule shaderModule;
+    VkShaderModule shader_module;
 
     ASSERT_SUCCESS(
         "failed to create shader module!",
-        vkCreateShaderModule(vulkan::_ctx.logical_device, &create_info, nullptr, &shaderModule));
+        vkCreateShaderModule(vulkan::_ctx.logical_device, &create_info, nullptr, &shader_module));
 
-    return shaderModule;
+    return shader_module;
   }
 }
 
-vulkan::PipelineHandle vulkan::pipelines::create(Settings settings) {
+vulkan::PipelineHandle vulkan::pipelines::create(Settings settings, RenderPassHandle render_pass) {
   // programming stages
   auto vertex_shader        = create_shader_module(settings.vertex_shader_fpath);
   auto fragmentation_shader = create_shader_module(settings.fragment_shader_fpath);
@@ -55,16 +54,18 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings) {
   fragment_shader_stage_info.module = fragmentation_shader;
   fragment_shader_stage_info.pName  = "main";
 
-  VkPipelineShaderStageCreateInfo shader_stages[] = {vertex_shader_stage_info,
-                                                     fragment_shader_stage_info};
+  VkPipelineShaderStageCreateInfo shader_stages[] = {
+      vertex_shader_stage_info,
+      fragment_shader_stage_info,
+  };
 
   // fixed function stages
   VkPipelineVertexInputStateCreateInfo vertex_input_info{};
   vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
   vertex_input_info.vertexBindingDescriptionCount   = 1;
   vertex_input_info.pVertexBindingDescriptions      = &settings.binding_description;
-  vertex_input_info.vertexAttributeDescriptionCount = settings.attribute_descriptions._size;
-  vertex_input_info.pVertexAttributeDescriptions    = settings.attribute_descriptions._data;
+  vertex_input_info.vertexAttributeDescriptionCount = settings.attribute_descriptions_format_count;
+  vertex_input_info.pVertexAttributeDescriptions    = settings.attribute_descriptions;
 
   VkPipelineInputAssemblyStateCreateInfo input_assembly{};
   input_assembly.sType    = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -79,12 +80,15 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings) {
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
 
-  VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+  VkDynamicState dynamic_states[] = {
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR,
+  };
 
   VkPipelineDynamicStateCreateInfo dynamic_state{};
   dynamic_state.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
   dynamic_state.dynamicStateCount = 2;
-  dynamic_state.pDynamicStates    = dynamicStates;
+  dynamic_state.pDynamicStates    = dynamic_states;
 
   VkRect2D scissor{};
   scissor.offset = {0, 0};
@@ -161,12 +165,12 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings) {
 
   VkPipelineLayoutCreateInfo pipeline_layout_create_info{};
   pipeline_layout_create_info.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipeline_layout_create_info.setLayoutCount = array::size(descriptor_set_layouts);
   pipeline_layout_create_info.pSetLayouts    = descriptor_set_layouts;
+  pipeline_layout_create_info.setLayoutCount = array::size(descriptor_set_layouts);
   pipeline_layout_create_info.pushConstantRangeCount = 0;
   pipeline_layout_create_info.pPushConstantRanges    = nullptr;
 
-  PipelineHandle handle{.value = next_handle_value++};
+  PipelineHandle handle{.value = hashmap::hasher(settings.name)};
 
   auto layout = hashmap::insert(layouts, handle.value, VkPipelineLayout{});
 
@@ -176,6 +180,7 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings) {
                                         nullptr,
                                         layout));
 
+  printf("render_pass %d\n", render_pass.value);
   VkGraphicsPipelineCreateInfo pipeline_create_info{};
   pipeline_create_info.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipeline_create_info.stageCount          = 2;
@@ -189,12 +194,12 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings) {
   pipeline_create_info.pColorBlendState    = &color_blending;
   pipeline_create_info.pDynamicState       = &dynamic_state;
   pipeline_create_info.layout              = *layout;
-  pipeline_create_info.renderPass         = *vulkan::render_pass::render_pass(settings.render_pass);
-  pipeline_create_info.subpass            = 0;
-  pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;
-  pipeline_create_info.basePipelineIndex  = -1;
+  pipeline_create_info.renderPass          = *vulkan::render_pass::render_pass(render_pass);
+  pipeline_create_info.subpass             = 0;
+  pipeline_create_info.basePipelineHandle  = VK_NULL_HANDLE;
+  pipeline_create_info.basePipelineIndex   = -1;
 
-  auto pipeline = hashmap::insert(::pipelines, handle.value, VkPipeline{});
+  auto pipeline = hashmap::insert(::_pipelines, handle.value, VkPipeline{});
 
   ASSERT_SUCCESS("failed to create graphics pipeline!",
                  vkCreateGraphicsPipelines(vulkan::_ctx.logical_device,
@@ -215,14 +220,24 @@ void vulkan::pipelines::cleanup(PipelineHandle handle) {
   vkDestroyPipelineLayout(vulkan::_ctx.logical_device, *layout(handle), nullptr);
 }
 
-void vulkan::pipelines::bind(PipelineHandle handle, CommandBufferHandle command_buffer_handle) {
+void vulkan::pipelines::cleanup() {
+  hashmap::for_each(_pipelines, [](decltype(_pipelines)::KeyValue kv) {
+    vulkan::pipelines::cleanup(PipelineHandle{.value = kv.k});
+  });
+}
+
+void vulkan::pipelines::bind(PipelineHandle pipeline, CommandBufferHandle command_buffer_handle) {
   vkCmdBindPipeline(*vulkan::command_buffers::buffer(command_buffer_handle),
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    *hashmap::value(::pipelines, handle.value));
+                    *hashmap::value(::_pipelines, pipeline.value));
+}
+
+vulkan::PipelineHandle vulkan::pipelines::by_name(const char* name) {
+  return PipelineHandle{.value = hashmap::hasher(name)};
 }
 
 VkPipeline* vulkan::pipelines::pipeline(PipelineHandle handle) {
-  return hashmap::value(::pipelines, handle.value);
+  return hashmap::value(::_pipelines, handle.value);
 }
 
 VkPipelineLayout* vulkan::pipelines::layout(PipelineHandle handle) {

@@ -1,10 +1,15 @@
 #include "engine.h"
 
+#include "arena.h"
 #include "render.h"
 #include "types.h"
+#include "ui.h"
 
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_init.h>
 #include <SDL3/SDL_timer.h>
+#include <cstdio>
+#include <cstdlib>
 
 namespace {
   engine::State state;
@@ -13,18 +18,41 @@ namespace {
   U64           frame_count   = 0;
   U64           fps_last_time;
 
-  render::Renderer renderer;
-}
+  SDL_Window* sdl_window;
+} // namespace
 
-engine::State& engine::init(const render::Settings& render_settings) {
+const engine::State* engine::init(const render::Settings& render_settings) {
+  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+    printf("failed to init SDL3: %s", SDL_GetError());
+    exit(0);
+  }
+
+  sdl_window =
+      SDL_CreateWindow("tengine", render_settings.width, render_settings.height, SDL_WINDOW_VULKAN);
+
+  if (!sdl_window) {
+    printf("failed to create SDL3 window: %s", SDL_GetError());
+    exit(0);
+  }
+
+  SDL_SetWindowResizable(sdl_window, true);
+
   previous_time = fps_last_time = SDL_GetPerformanceCounter();
 
-  renderer = render::init(render_settings);
+  render::init(render_settings, sdl_window);
 
-  return state;
+  return &state;
 }
 
-void engine::cleanup() { render::cleanup(renderer); }
+void engine::cleanup() {
+  render::cleanup();
+
+  ui::cleanup_frame();
+
+  SDL_DestroyWindow(sdl_window);
+
+  SDL_Quit();
+}
 
 void engine::begin_frame() {
   previous_time = current_time;
@@ -48,11 +76,15 @@ void engine::begin_frame() {
     }
   }
 
-  render::begin_frame(renderer);
+  render::begin_frame();
 }
 
 void engine::end_frame() {
-  render::end_frame(renderer);
+  render::end_frame();
+
+  /* ui::update(); */
+
+  arena::next_frame();
 
   if ((current_time - fps_last_time) > SDL_GetPerformanceFrequency()) {
     state.fps = frame_count /

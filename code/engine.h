@@ -2,6 +2,7 @@
 
 #include "render.h"
 #include "types.h"
+#include "vulkan/handles.h"
 
 namespace engine {
   struct State {
@@ -10,7 +11,7 @@ namespace engine {
     F64  dt   = 0.0;
   };
 
-  State& init(const render::Settings& render_settings);
+  const State* init(const render::Settings& render_settings);
   void   cleanup();
   void   begin_frame();
   void   end_frame();

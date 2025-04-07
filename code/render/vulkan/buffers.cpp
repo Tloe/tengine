@@ -3,10 +3,12 @@
 #include "arena.h"
 #include "context.h"
 #include "ds_hashmap.h"
+#include "handle.h"
 #include "vulkan/command_buffers.h"
 #include "vulkan/device.h"
 #include "vulkan/images.h"
 #include "vulkan/vulkan.h"
+#include <cstdio>
 
 namespace {
   auto                      mem_render_resources = arena::by_name("render_resources");
@@ -14,13 +16,13 @@ namespace {
   HashMap16<VkBuffer>       vk_buffers           = hashmap::init16<VkBuffer>(mem_render_resources);
   HashMap16<VkDeviceMemory> vk_memory = hashmap::init16<VkDeviceMemory>(mem_render_resources);
 
-  U16 next_handle_value = 0;
+  handle::Allocator<vulkan::BufferHandle,  U16, U16_MAX> handles;
 }
 
 vulkan::BufferHandle vulkan::buffers::create(VkDeviceSize          size,
                                              VkBufferUsageFlags    usage,
                                              VkMemoryPropertyFlags properties) {
-  BufferHandle handle{.value = next_handle_value++};
+  auto handle = handle::next(handles);
 
   hashmap::insert(byte_sizes, handle.value, static_cast<U32>(size));
   auto buffer = hashmap::insert(vk_buffers, handle.value, VkBuffer{});
@@ -56,6 +58,9 @@ vulkan::BufferHandle vulkan::buffers::create(VkDeviceSize          size,
 void vulkan::buffers::cleanup(BufferHandle handle) {
   vkDestroyBuffer(vulkan::_ctx.logical_device, *buffer(handle), nullptr);
   vkFreeMemory(vulkan::_ctx.logical_device, *memory(handle), nullptr);
+  hashmap::erase(vk_buffers, handle.value);
+  hashmap::erase(vk_memory, handle.value);
+  hashmap::erase(byte_sizes, handle.value);
 }
 
 void vulkan::buffers::copy(BufferHandle dst, void* src, U32 byte_size) {

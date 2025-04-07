@@ -4,6 +4,7 @@ set(HEADERS
     ds_array_dynamic.h
     ds_array_static.h
     ds_hashmap.h
+    ds_bitarray.h
     ds_string.h)
 set(SOURCES
     fnv-1a/hash_64a.cpp

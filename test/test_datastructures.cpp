@@ -5,8 +5,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+INIT_ARENA(string_test, 1024);
+INIT_ARENA(hashmap_test, 3000);
+
 TEST_CASE("ds_string", "[DS_STRING]") {
-  auto a = INIT_ARENA("string_test", 1024);
+  auto a = arena::by_name("string_test");
 
   String s = string::init(a, "tengine");
 
@@ -20,7 +23,7 @@ TEST_CASE("ds_string", "[DS_STRING]") {
 }
 
 TEST_CASE("ds_hashmap", "[DS_HASHMAP]") {
-  auto a = INIT_ARENA("hasmap_test", 3000);
+  auto a = arena::by_name("hashmap_test");
 
   auto hm = hashmap::init64<U64>(a);
 
@@ -50,8 +53,9 @@ TEST_CASE("ds_hashmap", "[DS_HASHMAP]") {
   hashmap::insert(hm, 18, 182);
   hashmap::insert(hm, 19, 182);
   hashmap::insert(hm, 20, 182);
+  hashmap::insert(hm, 288, 182);
 
-  REQUIRE(hm._size == 16);
+  REQUIRE(hm._size == 17);
   REQUIRE(hm._capacity == 32);
   REQUIRE(*hashmap::value(hm, 0) == 142);
   REQUIRE(*hashmap::value(hm, 1) == 152);
@@ -69,10 +73,11 @@ TEST_CASE("ds_hashmap", "[DS_HASHMAP]") {
   REQUIRE(*hashmap::value(hm, 18) == 182);
   REQUIRE(*hashmap::value(hm, 19) == 182);
   REQUIRE(*hashmap::value(hm, 20) == 182);
+  REQUIRE(*hashmap::value(hm, 288) == 182);
 
   hashmap::erase(hm, 424242);
 
-  REQUIRE(hm._size == 16);
+  REQUIRE(hm._size == 17);
   REQUIRE(hm._capacity == 32);
   REQUIRE(hashmap::value(hm, 42) == nullptr);
   REQUIRE(!hashmap::contains(hm, 42));
@@ -119,7 +124,7 @@ TEST_CASE("ds_hashmap", "[DS_HASHMAP]") {
 }
 
 TEST_CASE("ds_array_dynamic", "[DS_DYNAMICARRAY]") {
-  auto a = INIT_ARENA("hasmap_test", 1024);
+  auto a = arena::by_name("hashmap_test");
 
   auto da = array::init<String>(a);
 

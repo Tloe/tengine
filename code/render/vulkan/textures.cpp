@@ -117,7 +117,7 @@ vulkan::TextureSamplerHandle vulkan::textures::sampler(TextureHandle handle) {
   return *hashmap::value(samplers, handle.value);
 }
 
-void vulkan::textures::update_texture(TextureHandle handle, DynamicArray<U32>& updated_data) {
+void vulkan::textures::set(TextureHandle handle, DynamicArray<U32>& updated_data) {
   assert(hashmap::contains(staging_buffers, handle.value) &&
          hashmap::contains(staging_command_buffers, handle.value) &&
          "texture not created with staging buffer");

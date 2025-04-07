@@ -2,9 +2,11 @@
 
 #include "handle.h"
 #include "types.h"
+#include "vulkan/handles.h"
 
-namespace render {
-  struct MeshTag;
-  typedef Handle<MeshTag, U16, U16_MAX> MeshHandle;
-}
+struct MeshTag;
+typedef Handle<MeshTag, U16, U16_MAX> MeshHandle;
 
+typedef vulkan::TextureHandle TextureHandle;
+
+typedef vulkan::TextureSamplerHandle TextureSamplerHandle;

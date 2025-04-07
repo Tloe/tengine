@@ -6,6 +6,7 @@
 #include "types.h"
 #include "vulkan.h"
 
+#include <cstdio>
 #include <vulkan/vulkan_core.h>
 
 namespace {

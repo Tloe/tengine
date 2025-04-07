@@ -96,8 +96,7 @@ vulkan::RenderPassHandle vulkan::render_pass::create() {
 
   RenderPassHandle handle{.value = next_render_pass_handle++};
 
-  auto render_pass =
-      hashmap::insert(::render_passes, handle.value, VkRenderPass{});
+  auto render_pass = hashmap::insert(::render_passes, handle.value, VkRenderPass{});
 
   ASSERT_SUCCESS(
       "failed to create render pass!",
