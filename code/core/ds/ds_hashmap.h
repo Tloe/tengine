@@ -374,7 +374,7 @@ namespace hashmap {
   template <typename K, K empty_value, typename V>
   void for_each(THashMap<K, empty_value, V>& hm,
                 void (*fn)(typename THashMap<K, empty_value, V>::KeyValue)) {
-    for (U32 i = 0; i < hm._size; ++i) {
+    for (U32 i = 0; i < hm._capacity; ++i) {
       if (hm._data[i].k != hm._empty_value) {
         fn(hm._data[i]);
       }

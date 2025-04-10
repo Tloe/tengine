@@ -18,6 +18,7 @@
 
 INIT_ARENA(render, 100000);
 INIT_ARENA(render_resources, 100000);
+INIT_ARENA(render_ui, 10000000);
 INIT_ARENA(frame0, 10000);
 INIT_ARENA(frame1, 10000);
 

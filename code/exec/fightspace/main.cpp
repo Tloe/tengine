@@ -26,42 +26,69 @@ INIT_ARENA(frame1, 10000);
 ArenaHandle mem_render_resource = arena::by_name("render_resources");
 
 /* const int  FONT_ID_BODY_16        = 0; */
-Clay_Color contentBackgroundColor = {90, 90, 90, 255};
+Clay_Color contentBackgroundColor = {0, 0, 90, 255};
 
 Clay_RenderCommandArray build_ui() {
   Clay_BeginLayout();
 
+  Clay_Sizing layoutExpand = {
+      .width  = CLAY_SIZING_GROW(0),
+      .height = CLAY_SIZING_GROW(0),
+  };
+
   CLAY({
-      .id = CLAY_ID("OuterContainer"),
       .layout =
           {
-              .padding         = CLAY_PADDING_ALL(16),
-              .childGap        = 16,
+              .sizing          = layoutExpand,
+              .padding         = CLAY_PADDING_ALL(20),
               .layoutDirection = CLAY_TOP_TO_BOTTOM,
           },
-      .backgroundColor = {43, 41, 51, 255},
-  }) {
-    // Child elements go inside braces
-    CLAY({
-        .id = CLAY_ID("HeaderBar"),
-        .layout =
-            {
-                .sizing =
-                    {
-                        .width  = CLAY_SIZING_GROW(0),
-                        .height = CLAY_SIZING_FIXED(60),
-                    },
-                .padding        = {16, 16, 0, 0},
-                .childGap       = 16,
-                .childAlignment = {.y = CLAY_ALIGN_Y_CENTER},
-            },
-        .backgroundColor = contentBackgroundColor,
-        .cornerRadius    = CLAY_CORNER_RADIUS(8),
 
+  }) {
+    CLAY({
+        .layout          = {.sizing = layoutExpand},
+        .backgroundColor = {.r = 0, .g = 100, .b = 0, .a = 255},
     }) {
-      // Header buttons go here
+      CLAY({
+          .layout          = {.sizing = layoutExpand},
+          .backgroundColor = {.r = 0, .g = 0, .b = 100, .a = 255},
+          .cornerRadius    = CLAY_CORNER_RADIUS(8),
+      }) {
+        // etc
+      }
     }
   }
+  /* CLAY({ */
+  /*     .id = CLAY_ID("OuterContainer"), */
+  /*     .layout = */
+  /*         { */
+  /*             .padding         = CLAY_PADDING_ALL(16), */
+  /*             .childGap        = 16, */
+  /*             .layoutDirection = CLAY_TOP_TO_BOTTOM, */
+  /*         }, */
+  /*     .backgroundColor = {0, 41, 51, 255}, */
+  /* }) { */
+  /*   // Child elements go inside braces */
+  /*   CLAY({ */
+  /*       .id = CLAY_ID("HeaderBar"), */
+  /*       .layout = */
+  /*           { */
+  /*               .sizing = */
+  /*                   { */
+  /*                       .width  = CLAY_SIZING_GROW(0), */
+  /*                       .height = CLAY_SIZING_FIXED(60), */
+  /*                   }, */
+  /*               .padding        = {16, 16, 0, 0}, */
+  /*               .childGap       = 16, */
+  /*               .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}, */
+  /*           }, */
+  /*       .backgroundColor = contentBackgroundColor, */
+  /*       .cornerRadius    = CLAY_CORNER_RADIUS(8), */
+  /*  */
+  /*   }) { */
+  /*     // Header buttons go here */
+  /*   } */
+  /* } */
 
   Clay_RenderCommandArray renderCommands = Clay_EndLayout();
   for (I32 i = 0; i < renderCommands.length; i++) {

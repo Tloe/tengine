@@ -125,15 +125,21 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings, RenderPassHa
 
   VkPipelineDepthStencilStateCreateInfo depth_stencil{};
   depth_stencil.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depth_stencil.depthTestEnable       = VK_TRUE;
-  depth_stencil.depthWriteEnable      = VK_TRUE;
-  depth_stencil.depthCompareOp        = VK_COMPARE_OP_LESS;
   depth_stencil.depthBoundsTestEnable = VK_FALSE;
   depth_stencil.minDepthBounds        = 0.0f;
   depth_stencil.maxDepthBounds        = 1.0f;
   depth_stencil.stencilTestEnable     = VK_FALSE;
   depth_stencil.front                 = {};
   depth_stencil.back                  = {};
+
+  if (settings.disable_depth_testing) {
+    depth_stencil.depthTestEnable  = VK_FALSE;
+    depth_stencil.depthWriteEnable = VK_FALSE;
+  } else {
+    depth_stencil.depthTestEnable  = VK_TRUE;
+    depth_stencil.depthWriteEnable = VK_TRUE;
+    depth_stencil.depthCompareOp   = VK_COMPARE_OP_LESS_OR_EQUAL;
+  }
 
   VkPipelineColorBlendAttachmentState color_blend_attachment{};
   color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
@@ -180,7 +186,6 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings, RenderPassHa
                                         nullptr,
                                         layout));
 
-  printf("render_pass %d\n", render_pass.value);
   VkGraphicsPipelineCreateInfo pipeline_create_info{};
   pipeline_create_info.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipeline_create_info.stageCount          = 2;
@@ -216,8 +221,8 @@ vulkan::PipelineHandle vulkan::pipelines::create(Settings settings, RenderPassHa
 }
 
 void vulkan::pipelines::cleanup(PipelineHandle handle) {
-  vkDestroyPipeline(vulkan::_ctx.logical_device, *pipeline(handle), nullptr);
   vkDestroyPipelineLayout(vulkan::_ctx.logical_device, *layout(handle), nullptr);
+  vkDestroyPipeline(vulkan::_ctx.logical_device, *pipeline(handle), nullptr);
 }
 
 void vulkan::pipelines::cleanup() {

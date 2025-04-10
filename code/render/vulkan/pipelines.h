@@ -15,6 +15,7 @@ namespace vulkan {
       const U32                                attribute_descriptions_format_count = 0;
       VkDescriptorSetLayout*                   ubo_layouts;
       U32                                      ubo_layouts_count;
+      bool                                     disable_depth_testing = false;
     };
 
     PipelineHandle create(Settings settings, RenderPassHandle render_pass);

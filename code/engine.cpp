@@ -82,8 +82,6 @@ void engine::begin_frame() {
 void engine::end_frame() {
   render::end_frame();
 
-  /* ui::update(); */
-
   arena::next_frame();
 
   if ((current_time - fps_last_time) > SDL_GetPerformanceFrequency()) {

@@ -488,8 +488,9 @@ void ui::init(SDL_Window* sdl_window, vulkan::RenderPassHandle render_pass) {
           .attribute_descriptions = vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC,
           .attribute_descriptions_format_count =
               array::size(vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC),
-          .ubo_layouts       = ubo_layouts,
-          .ubo_layouts_count = array::size(ubo_layouts),
+          .ubo_layouts           = ubo_layouts,
+          .ubo_layouts_count     = array::size(ubo_layouts),
+          .disable_depth_testing = true,
       },
       render_pass);
 
@@ -509,12 +510,16 @@ void ui::init(SDL_Window* sdl_window, vulkan::RenderPassHandle render_pass) {
 }
 
 void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
+  if (!_ui_builder_fn) return;
+
   auto clay_commands = _ui_builder_fn();
 
   int width, height;
   SDL_GetWindowSize(_sdl_window, &width, &height);
+
   auto proj =
       glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, -1.0f, 1.0f);
+
   auto view = glm::mat4(1.0f);
 
   render::set_view_projection(view, proj);
@@ -529,6 +534,8 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
         .h = clay_command->boundingBox.height,
     };
 
+    printf("rect: x: %f y: %f, w: %f h: %f\n", rect.x, rect.y, rect.w, rect.h);
+
     auto model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
                  glm::scale(glm::mat4(1.0f), glm::vec3(rect.w, rect.h, 1.0f));
 
@@ -538,14 +545,16 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
       case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
         Clay_RectangleRenderData* config = &clay_command->renderData.rectangle;
 
-        glm::vec4 color = {config->backgroundColor.r / 255,
-                           config->backgroundColor.g / 255,
-                           config->backgroundColor.b / 255,
-                           config->backgroundColor.a / 255};
+        glm::vec4 color = {config->backgroundColor.r / 255.0f,
+                           config->backgroundColor.g / 255.0f,
+                           config->backgroundColor.b / 255.0f,
+                           config->backgroundColor.a / 255.0f};
 
         if (config->cornerRadius.topLeft > 0) {
+          printf("DRAW ROUNDED\n");
           draw_fill_rounded_rect(command_buffer, rect, config->cornerRadius.topLeft, color);
         } else {
+          printf("DRAW RECT\n");
           draw_fill_rect(command_buffer, rect, color);
         }
       } break;
@@ -595,12 +604,14 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
         break;
     }
   }
+
+  printf("END UI FRAME\n\n");
 }
 
-void ui::cleanup_frame() { 
+void ui::cleanup_frame() {
   for (U32 i = 0; i < _frame_meshes._size; ++i) {
     meshes::cleanup(_frame_meshes._data[i]);
-  } 
+  }
   array::resize(_frame_meshes, 0);
 }
 
