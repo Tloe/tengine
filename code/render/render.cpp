@@ -100,7 +100,7 @@ void render::init(Settings settings, SDL_Window* sdl_window) {
   vulkan::ubos::init(settings.max_textures);
 
   for (U32 i = 0; i < settings.pipeline_settings_count; ++i) {
-    vulkan::pipelines::create(settings.pipeline_settings[i], render_pass);
+    vulkan::pipelines::create(render_pass, settings.pipeline_settings[i]);
   }
 
   ui::init(sdl_window, render_pass);
@@ -125,15 +125,14 @@ void render::cleanup() {
   vulkan::context::cleanup(debug);
 }
 
-void
-render::bind_pipeline(vulkan::PipelineHandle pipeline) {
+void render::bind_pipeline(vulkan::PipelineHandle pipeline) {
   auto frame = &frames[current_frame];
 
   vulkan::pipelines::bind(pipeline, frame->command_buffer);
   vulkan::ubos::bind_global_ubo(frame->command_buffer, pipeline);
-  vulkan::ubos::bind_model_ubo(frame->command_buffer, pipeline); 
-  vulkan::ubos::bind_textures(frame->command_buffer, pipeline); 
-} 
+  vulkan::ubos::bind_model_ubo(frame->command_buffer, pipeline);
+  vulkan::ubos::bind_textures(frame->command_buffer, pipeline);
+}
 
 void render::set_view_projection(glm::mat4& view, glm::mat4& proj) {
   vulkan::ubos::set_global_ubo(vulkan::ubos::GlobalUBO{

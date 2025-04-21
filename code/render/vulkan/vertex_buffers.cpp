@@ -12,7 +12,7 @@ namespace {
   HashMap16<U32> vertex_counts       = hashmap::init16<U32>(mem_render_resource);
 }
 
-vulkan::VertexBufferHandle vulkan::vertex_buffers::create(void* vertices, VkDeviceSize byte_size) {
+vulkan::VertexBufferHandle vulkan::vertex_buffers::create(const void* vertices, VkDeviceSize byte_size) {
   auto staging =
       buffers::create(byte_size,
                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -32,13 +32,6 @@ vulkan::VertexBufferHandle vulkan::vertex_buffers::create(void* vertices, VkDevi
   hashmap::insert(vertex_counts, vertex_buffer.value);
 
   return VertexBufferHandle{.value = vertex_buffer.value};
-}
-
-void vulkan::vertex_buffers::update(VertexBufferHandle vertex_buffer,
-                                    void*              vertices,
-                                    VkDeviceSize       byte_size) {
-
-
 }
 
 void vulkan::vertex_buffers::cleanup(VertexBufferHandle handle) {

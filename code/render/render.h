@@ -15,6 +15,7 @@ namespace render {
     U16                          max_textures;
     U16                          width;
     U16                          height;
+    U32                          ubo_count;
     vulkan::pipelines::Settings* pipeline_settings       = nullptr;
     U32                          pipeline_settings_count = 0;
   };

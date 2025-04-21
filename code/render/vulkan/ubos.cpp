@@ -13,7 +13,6 @@
 #include "vulkan/vulkan.h"
 
 #include <cstdio>
-#include <iostream>
 #include <vulkan/vulkan_core.h>
 
 namespace {
@@ -24,8 +23,8 @@ namespace {
     COUNT,
   };
 
-  VkDescriptorPool      pool;
-  VkDescriptorSetLayout layouts[UBOS::COUNT];
+  VkDescriptorPool      _pool;
+  VkDescriptorSetLayout _layouts[UBOS::COUNT];
   VkDescriptorSet       sets[UBOS::COUNT];
   vulkan::BufferHandle  buffers[UBOS::COUNT];
   void*                 memory_ptrs[2];
@@ -46,13 +45,13 @@ namespace {
                    vkCreateDescriptorSetLayout(vulkan::_ctx.logical_device,
                                                &create_info,
                                                nullptr,
-                                               &layouts[type]));
+                                               &_layouts[type]));
 
     VkDescriptorSetAllocateInfo alloc_info{};
     alloc_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool     = pool;
+    alloc_info.descriptorPool     = _pool;
     alloc_info.descriptorSetCount = 1;
-    alloc_info.pSetLayouts        = &layouts[type];
+    alloc_info.pSetLayouts        = &_layouts[type];
 
     vkAllocateDescriptorSets(vulkan::_ctx.logical_device, &alloc_info, &sets[type]);
 
@@ -85,36 +84,36 @@ namespace {
   }
 
   void init_textures_ubo(U16 max_textures) {
-    VkDescriptorSetLayoutBinding texture_binding{};
-    texture_binding.binding         = 0;
-    texture_binding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    texture_binding.descriptorCount = max_textures;
-    texture_binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding         = 0;
+    binding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    binding.descriptorCount = max_textures;
+    binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo texture_layout_create_info{};
     texture_layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     texture_layout_create_info.bindingCount = 1;
-    texture_layout_create_info.pBindings    = &texture_binding;
+    texture_layout_create_info.pBindings    = &binding;
 
     ASSERT_SUCCESS("failed to create global ubo descriptor set layout!",
                    vkCreateDescriptorSetLayout(vulkan::_ctx.logical_device,
                                                &texture_layout_create_info,
                                                nullptr,
-                                               &::layouts[UBOS::TEXTURE_UBO]));
+                                               &_layouts[UBOS::TEXTURE_UBO]));
 
-    VkDescriptorSetAllocateInfo bindlessAllocInfo{};
-    bindlessAllocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    bindlessAllocInfo.descriptorPool     = pool;
-    bindlessAllocInfo.descriptorSetCount = 1;
-    bindlessAllocInfo.pSetLayouts        = &layouts[UBOS::TEXTURE_UBO];
+    VkDescriptorSetAllocateInfo alloc_info{};
+    alloc_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool     = _pool;
+    alloc_info.descriptorSetCount = 1;
+    alloc_info.pSetLayouts        = &_layouts[UBOS::TEXTURE_UBO];
 
     vkAllocateDescriptorSets(vulkan::_ctx.logical_device,
-                             &bindlessAllocInfo,
+                             &alloc_info,
                              &sets[UBOS::TEXTURE_UBO]);
   }
 }
 
-void vulkan::ubos::init(U32 max_textures) {
+void vulkan::ubos::init(U32 max_textures, U8 max_sets) {
   VkDescriptorPoolSize pool_sizes[2];
   pool_sizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   pool_sizes[0].descriptorCount = 2; // GlobalUBO + ModelUBO
@@ -123,13 +122,13 @@ void vulkan::ubos::init(U32 max_textures) {
 
   VkDescriptorPoolCreateInfo pool_create_info{};
   pool_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  pool_create_info.poolSizeCount = array::size(pool_sizes);
   pool_create_info.pPoolSizes    = pool_sizes;
+  pool_create_info.poolSizeCount = array::size(pool_sizes);
   pool_create_info.maxSets       = 3; // GlobalUBO + ModelUBO + 1 Bindless Texture Set
 
   ASSERT_SUCCESS(
       "failed to create descriptor pool!",
-      vkCreateDescriptorPool(vulkan::_ctx.logical_device, &pool_create_info, nullptr, &pool));
+      vkCreateDescriptorPool(vulkan::_ctx.logical_device, &pool_create_info, nullptr, &_pool));
 
   init_uniform_buffer(UBOS::GLOBAL_UBO, sizeof(GlobalUBO));
   init_uniform_buffer(UBOS::MODEL_UBO, sizeof(ModelUBO));
@@ -141,9 +140,9 @@ void vulkan::ubos::cleanup() {
   vulkan::buffers::cleanup(::buffers[UBOS::MODEL_UBO]);
 
   for (U32 i = 0; i < UBOS::COUNT; ++i) {
-    vkDestroyDescriptorSetLayout(vulkan::_ctx.logical_device, ::layouts[i], nullptr);
+    vkDestroyDescriptorSetLayout(vulkan::_ctx.logical_device, _layouts[i], nullptr);
   }
-  vkDestroyDescriptorPool(vulkan::_ctx.logical_device, pool, nullptr);
+  vkDestroyDescriptorPool(vulkan::_ctx.logical_device, _pool, nullptr);
 }
 
 void vulkan::ubos::set_global_ubo(GlobalUBO data) {
@@ -207,8 +206,8 @@ void vulkan::ubos::bind_textures(CommandBufferHandle command_buffer, PipelineHan
                           nullptr);
 }
 
-VkDescriptorSetLayout vulkan::ubos::global_ubo_layout() { return layouts[UBOS::GLOBAL_UBO]; }
+VkDescriptorSetLayout vulkan::ubos::global_ubo_layout() { return _layouts[UBOS::GLOBAL_UBO]; }
 
-VkDescriptorSetLayout vulkan::ubos::model_ubo_layout() { return layouts[UBOS::MODEL_UBO]; }
+VkDescriptorSetLayout vulkan::ubos::model_ubo_layout() { return _layouts[UBOS::MODEL_UBO]; }
 
-VkDescriptorSetLayout vulkan::ubos::textures_ubo_layout() { return layouts[UBOS::TEXTURE_UBO]; }
+VkDescriptorSetLayout vulkan::ubos::textures_ubo_layout() { return _layouts[UBOS::TEXTURE_UBO]; }

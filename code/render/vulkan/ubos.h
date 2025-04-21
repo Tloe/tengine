@@ -10,6 +10,11 @@
 
 namespace vulkan {
   namespace ubos {
+    struct Settings {
+      U32 ubo_count = 0;
+      U32 
+    };
+
     struct GlobalUBO {
       glm::mat4 view;
       glm::mat4 proj;
@@ -24,7 +29,7 @@ namespace vulkan {
       int texture_index;
     };
 
-    void init(U32 max_textures);
+    void init(U32 max_textures, U8 max_sets);
     void cleanup();
 
     void set_global_ubo(GlobalUBO data);

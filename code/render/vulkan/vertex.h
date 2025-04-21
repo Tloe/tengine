@@ -70,7 +70,7 @@ namespace vulkan {
 
   constexpr VkVertexInputBindingDescription VERTEX2D_COLOR_TEX_BINDING_DESC = {
       .binding   = 0,
-      .stride    = sizeof(VertexTex),
+      .stride    = sizeof(Vertex2DColorTex),
       .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
   };
 }

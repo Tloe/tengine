@@ -37,7 +37,7 @@ namespace {
   }
 }
 
-vulkan::PipelineHandle vulkan::pipelines::create(Settings settings, RenderPassHandle render_pass) {
+vulkan::PipelineHandle vulkan::pipelines::create(RenderPassHandle render_pass, Settings settings) {
   // programming stages
   auto vertex_shader        = create_shader_module(settings.vertex_shader_fpath);
   auto fragmentation_shader = create_shader_module(settings.fragment_shader_fpath);

@@ -63,7 +63,7 @@ void vulkan::buffers::cleanup(BufferHandle handle) {
   hashmap::erase(byte_sizes, handle.value);
 }
 
-void vulkan::buffers::copy(BufferHandle dst, void* src, U32 byte_size) {
+void vulkan::buffers::copy(BufferHandle dst, const void* src, VkDeviceSize byte_size) {
   void* mapped;
   auto  buffer_memory = *buffers::memory(dst);
   vkMapMemory(vulkan::_ctx.logical_device, buffer_memory, 0, byte_size, 0, &mapped);

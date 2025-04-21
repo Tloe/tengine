@@ -10,7 +10,7 @@ namespace vulkan {
          create(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
     void cleanup(BufferHandle handle);
 
-    void copy(BufferHandle dst, void* src, U32 byte_size);
+    void copy(BufferHandle dst, const void* src, VkDeviceSize byte_size);
     void copy(BufferHandle dst, BufferHandle src, VkDeviceSize size);
     void copy(ImageHandle dst, BufferHandle src, U32 w, U32 h);
 

@@ -30,6 +30,8 @@ namespace {
 
   SDL_Window* _sdl_window = nullptr;
 
+  vulkan::PipelineHandle _ui_pipeline;
+
   const U32 NUM_CIRCLE_SEGMENTS = 16;
   const U32 FONT_ID             = 0;
 
@@ -60,55 +62,56 @@ namespace {
 
   void draw_fill_rounded_rect(vulkan::CommandBufferHandle command_buffer,
                               const Rect                  rect,
-                              F32                         cornerRadius,
+                              F32                         corner_radius,
                               glm::vec4                   color) {
+    printf("COLOR: %s\n", glm::to_string(color).c_str());
+
+    U32 index_count = 0, vertex_count = 0;
+
     F32 min_radius     = std::min(rect.w, rect.h) / 2.0f;
-    F32 clamped_radius = std::min(cornerRadius, min_radius);
+    F32 clamped_radius = std::min(corner_radius, min_radius);
 
     U32 num_circle_segments =
-        std::max(static_cast<U32>(16), static_cast<U32>(clamped_radius * 0.5f));
+        std::max(NUM_CIRCLE_SEGMENTS, static_cast<U32>(clamped_radius * 0.5f));
 
     U32 total_vertices = 4 + (4 * (num_circle_segments * 2)) + 2 * 4;
     U32 total_indices  = 6 + (4 * (num_circle_segments * 3)) + 6 * 4;
 
-    auto vertices =
-        array::init<vulkan::Vertex2DColorTex>(arena::frame(), total_vertices, total_vertices);
-    auto indices = array::init<U32>(arena::frame(), total_indices, total_indices);
-
-    U32 indexCount = 0, vertexCount = 0;
+    vulkan::Vertex2DColorTex vertices[total_vertices];
+    U32                      indices[total_indices];
 
     // define center rectangle
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + clamped_radius, rect.y + clamped_radius},
         color,
         {0, 0},
     };
 
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + rect.w - clamped_radius, rect.y + clamped_radius},
         color,
         {1, 0},
 
     };
 
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + rect.w - clamped_radius, rect.y + rect.h - clamped_radius},
         color,
         {1, 1},
     };
 
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + clamped_radius, rect.y + rect.h - clamped_radius},
         color,
         {0, 1},
     };
 
-    indices._data[indexCount++] = 0;
-    indices._data[indexCount++] = 1;
-    indices._data[indexCount++] = 3;
-    indices._data[indexCount++] = 1;
-    indices._data[indexCount++] = 2;
-    indices._data[indexCount++] = 3;
+    indices[index_count++] = 0;
+    indices[index_count++] = 1;
+    indices[index_count++] = 3;
+    indices[index_count++] = 1;
+    indices[index_count++] = 2;
+    indices[index_count++] = 3;
 
     // define rounded corners as triangle fans
     const F32 step = (glm::pi<F32>() / 2) / num_circle_segments;
@@ -118,181 +121,155 @@ namespace {
       const F32 angle2 = ((F32)i + 1.0f) * step;
 
       for (int j = 0; j < 4; j++) { // Iterate over four corners
-        F32 cx, cy, signX, signY;
+        F32 cx, cy, sign_x, sign_y;
 
         switch (j) {
           case 0:
-            cx    = rect.x + clamped_radius;
-            cy    = rect.y + clamped_radius;
-            signX = -1;
-            signY = -1;
+            cx     = rect.x + clamped_radius;
+            cy     = rect.y + clamped_radius;
+            sign_x = -1;
+            sign_y = -1;
             break; // Top-left
           case 1:
-            cx    = rect.x + rect.w - clamped_radius;
-            cy    = rect.y + clamped_radius;
-            signX = 1;
-            signY = -1;
+            cx     = rect.x + rect.w - clamped_radius;
+            cy     = rect.y + clamped_radius;
+            sign_x = 1;
+            sign_y = -1;
             break; // Top-right
           case 2:
-            cx    = rect.x + rect.w - clamped_radius;
-            cy    = rect.y + rect.h - clamped_radius;
-            signX = 1;
-            signY = 1;
+            cx     = rect.x + rect.w - clamped_radius;
+            cy     = rect.y + rect.h - clamped_radius;
+            sign_x = 1;
+            sign_y = 1;
             break; // Bottom-right
           case 3:
-            cx    = rect.x + clamped_radius;
-            cy    = rect.y + rect.h - clamped_radius;
-            signX = -1;
-            signY = 1;
+            cx     = rect.x + clamped_radius;
+            cy     = rect.y + rect.h - clamped_radius;
+            sign_x = -1;
+            sign_y = 1;
             break; // Bottom-left
           default:
             return;
         }
 
-        vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
-            {cx + glm::cos<F32>(angle1) * clamped_radius * signX,
-             cy + glm::sin<F32>(angle1) * clamped_radius * signY},
+        vertices[vertex_count++] = vulkan::Vertex2DColorTex{
+            {cx + glm::cos<F32>(angle1) * clamped_radius * sign_x,
+             cy + glm::sin<F32>(angle1) * clamped_radius * sign_y},
             color,
             {0, 0},
         };
 
-        vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
-            {cx + glm::cos<F32>(angle2) * clamped_radius * signX,
-             cy + glm::sin<F32>(angle2) * clamped_radius * signY},
+        vertices[vertex_count++] = vulkan::Vertex2DColorTex{
+            {cx + glm::cos<F32>(angle2) * clamped_radius * sign_x,
+             cy + glm::sin<F32>(angle2) * clamped_radius * sign_y},
             color,
             {0, 0},
         };
 
-        indices._data[indexCount++] = j; // Connect to corresponding central rectangle vertex
-        indices._data[indexCount++] = vertexCount - 2;
-        indices._data[indexCount++] = vertexCount - 1;
+        indices[index_count++] = j; // Connect to corresponding central rectangle vertex
+        indices[index_count++] = vertex_count - 2;
+        indices[index_count++] = vertex_count - 1;
       }
     }
 
     // Define edge rectangles
     //  Top edge
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + clamped_radius, rect.y},
         color,
         {0, 0},
     };
 
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + rect.w - clamped_radius, rect.y},
         color,
         {1, 0},
     }; // TR
 
-    indices._data[indexCount++] = 0;
-    indices._data[indexCount++] = vertexCount - 2; // TL
-    indices._data[indexCount++] = vertexCount - 1; // TR
-    indices._data[indexCount++] = 1;
-    indices._data[indexCount++] = 0;
-    indices._data[indexCount++] = vertexCount - 1; // TR
-                                                   //
+    indices[index_count++] = 0;
+    indices[index_count++] = vertex_count - 2; // TL
+    indices[index_count++] = vertex_count - 1; // TR
+    indices[index_count++] = 1;
+    indices[index_count++] = 0;
+    indices[index_count++] = vertex_count - 1; // TR
+                                               //
     // Right edge
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + rect.w, rect.y + clamped_radius},
         color,
         {1, 0},
     }; // RT
 
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + rect.w, rect.y + rect.h - clamped_radius},
         color,
         {1, 1},
     }; // RB
 
-    indices._data[indexCount++] = 1;
-    indices._data[indexCount++] = vertexCount - 2; // RT
-    indices._data[indexCount++] = vertexCount - 1; // RB
-    indices._data[indexCount++] = 2;
-    indices._data[indexCount++] = 1;
-    indices._data[indexCount++] = vertexCount - 1; // RB
+    indices[index_count++] = 1;
+    indices[index_count++] = vertex_count - 2; // RT
+    indices[index_count++] = vertex_count - 1; // RB
+    indices[index_count++] = 2;
+    indices[index_count++] = 1;
+    indices[index_count++] = vertex_count - 1; // RB
 
     // Bottom edge
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + rect.w - clamped_radius, rect.y + rect.h},
         color,
         {1, 1},
     }; // BR
 
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + clamped_radius, rect.y + rect.h},
         color,
         {0, 1},
     }; // BL
 
-    indices._data[indexCount++] = 2;
-    indices._data[indexCount++] = vertexCount - 2; // BR
-    indices._data[indexCount++] = vertexCount - 1; // BL
-    indices._data[indexCount++] = 3;
-    indices._data[indexCount++] = 2;
-    indices._data[indexCount++] = vertexCount - 1; // BL
-                                                   //
+    indices[index_count++] = 2;
+    indices[index_count++] = vertex_count - 2; // BR
+    indices[index_count++] = vertex_count - 1; // BL
+    indices[index_count++] = 3;
+    indices[index_count++] = 2;
+    indices[index_count++] = vertex_count - 1; // BL
+                                               //
     // Left edge
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x, rect.y + rect.h - clamped_radius},
         color,
         {0, 1},
     }; // LB
-    vertices._data[vertexCount++] = vulkan::Vertex2DColorTex{
+    vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x, rect.y + clamped_radius},
         color,
         {0, 0},
     }; // LT
 
-    indices._data[indexCount++] = 3;
-    indices._data[indexCount++] = vertexCount - 2; // LB
-    indices._data[indexCount++] = vertexCount - 1; // LT
-    indices._data[indexCount++] = 0;
-    indices._data[indexCount++] = 3;
-    indices._data[indexCount++] = vertexCount - 1; // LT
+    indices[index_count++] = 3;
+    indices[index_count++] = vertex_count - 2; // LB
+    indices[index_count++] = vertex_count - 1; // LT
+    indices[index_count++] = 0;
+    indices[index_count++] = 3;
+    indices[index_count++] = vertex_count - 1; // LT
 
     // Create Vulkan buffers and copy vertex/index data
-    auto mesh = meshes::create(vertices, indices);
+    auto mesh = meshes::create(vertices, total_vertices, indices, total_indices);
     meshes::draw(command_buffer, mesh);
     array::push_back(_frame_meshes, mesh);
   }
 
   void
   draw_fill_rect(vulkan::CommandBufferHandle command_buffer, const Rect rect, glm::vec4 color) {
-    auto vertices = array::init<vulkan::Vertex2DColorTex>(arena::frame(), 4, 4);
-    auto indices  = array::init<U32>(arena::frame(), 6, 6);
-
-    vertices._data[0] = vulkan::Vertex2DColorTex{
-        {rect.x, rect.y},
-        color,
-        {0, 0},
+    vulkan::Vertex2DColorTex vertices[] = {
+        {{rect.x, rect.y}, color, {0, 0}},
+        {{rect.x + rect.w, rect.y}, color, {1, 0}},
+        {{rect.x + rect.w, rect.y + rect.h}, color, {1, 1}},
+        {{rect.x, rect.y + rect.h}, color, {0, 1}},
     };
 
-    vertices._data[1] = vulkan::Vertex2DColorTex{
-        {rect.x + rect.w, rect.y},
-        color,
-        {1, 0},
+    U32 indices[] = {0, 1, 3, 1, 2, 3};
 
-    };
-
-    vertices._data[2] = vulkan::Vertex2DColorTex{
-        {rect.x + rect.w, rect.y + rect.h},
-        color,
-        {1, 1},
-    };
-
-    vertices._data[3] = vulkan::Vertex2DColorTex{
-        {rect.x, rect.y + rect.h},
-        color,
-        {0, 1},
-    };
-
-    indices._data[0] = 0;
-    indices._data[1] = 1;
-    indices._data[2] = 3;
-    indices._data[3] = 1;
-    indices._data[4] = 2;
-    indices._data[5] = 3;
-
-    auto mesh = meshes::create(vertices, indices);
+    auto mesh = meshes::create(vertices, 4, indices, 6);
     meshes::draw(command_buffer, mesh);
     array::push_back(_frame_meshes, mesh);
   }
@@ -304,27 +281,27 @@ namespace {
                 const F32                   endAngle,
                 const F32                   thickness,
                 const glm::vec4             color) {
-    const float radStart = startAngle * (glm::pi<F32>() / 180.0f);
-    const float radEnd   = endAngle * (glm::pi<F32>() / 180.0f);
+    const float rad_start = startAngle * (glm::pi<F32>() / 180.0f);
+    const float rad_end   = endAngle * (glm::pi<F32>() / 180.0f);
 
     // Determine how many segments to use.
-    const U32 numCircleSegments = std::max(NUM_CIRCLE_SEGMENTS, static_cast<U32>(radius * 1.5f));
-    const F32 angleStep         = (radEnd - radStart) / static_cast<float>(numCircleSegments);
-    const F32 thicknessStep     = 0.4f; // Arbitrary value to space the rings.
+    const U32 num_circle_segments = std::max(NUM_CIRCLE_SEGMENTS, static_cast<U32>(radius * 1.5f));
+    const F32 angle_step          = (rad_end - rad_start) / static_cast<float>(num_circle_segments);
+    const F32 thickness_step      = 0.4f; // Arbitrary value to space the rings.
 
     // For each "ring" of the arc (to simulate thickness)...
-    for (F32 t = thicknessStep; t < thickness - thicknessStep; t += thicknessStep) {
+    for (F32 t = thickness_step; t < thickness - thickness_step; t += thickness_step) {
       // Temporary container for this ring’s vertices.
       printf("CHECK THESE SIZES 100 needed?");
       auto vertices = array::init<vulkan::Vertex2DColorTex>(arena::frame(), 100);
 
-      const F32 clampedRadius = std::max(radius - t, 1.0f);
+      const F32 clamped_radius = std::max(radius - t, 1.0f);
 
       // Generate the points along the arc.
-      for (int i = 0; i <= numCircleSegments; i++) {
-        F32 angle = radStart + i * angleStep;
-        F32 x     = center.x + std::cos(angle) * clampedRadius;
-        F32 y     = center.y + std::sin(angle) * clampedRadius;
+      for (U32 i = 0; i <= num_circle_segments; i++) {
+        F32 angle = rad_start + i * angle_step;
+        F32 x     = center.x + std::cos(angle) * clamped_radius;
+        F32 y     = center.y + std::sin(angle) * clamped_radius;
         // Create vertex with position and per-vertex color.
         array::push_back(vertices,
                          vulkan::Vertex2DColorTex{
@@ -343,13 +320,13 @@ namespace {
   void draw_border(vulkan::CommandBufferHandle command_buffer,
                    Rect                        rect,
                    Clay_BorderRenderData*      clay_data) {
-    const F32 minRadius = std::min(rect.w, rect.h) / 2.0f;
+    const F32 min_radius = std::min(rect.w, rect.h) / 2.0f;
 
-    const Clay_CornerRadius clampedRadii = {
-        .topLeft     = std::min(clay_data->cornerRadius.topLeft, minRadius),
-        .topRight    = std::min(clay_data->cornerRadius.topRight, minRadius),
-        .bottomLeft  = std::min(clay_data->cornerRadius.bottomLeft, minRadius),
-        .bottomRight = std::min(clay_data->cornerRadius.bottomRight, minRadius)};
+    const Clay_CornerRadius clamped_radii = {
+        .topLeft     = std::min(clay_data->cornerRadius.topLeft, min_radius),
+        .topRight    = std::min(clay_data->cornerRadius.topRight, min_radius),
+        .bottomLeft  = std::min(clay_data->cornerRadius.bottomLeft, min_radius),
+        .bottomRight = std::min(clay_data->cornerRadius.bottomRight, min_radius)};
 
     glm::vec4 color = {
         clay_data->color.r / 255,
@@ -360,8 +337,8 @@ namespace {
 
     // edges
     if (clay_data->width.left > 0) {
-      const F32 starting_y = rect.y + clampedRadii.topLeft;
-      const F32 length     = rect.h - clampedRadii.topLeft - clampedRadii.bottomLeft;
+      const F32 starting_y = rect.y + clamped_radii.topLeft;
+      const F32 length     = rect.h - clamped_radii.topLeft - clamped_radii.bottomLeft;
 
       Rect line = {
           rect.x,
@@ -375,8 +352,8 @@ namespace {
 
     if (clay_data->width.right > 0) {
       const F32 starting_x = rect.x + rect.w - static_cast<F32>(clay_data->width.right);
-      const F32 starting_y = rect.y + clampedRadii.topRight;
-      const F32 length     = rect.h - clampedRadii.topRight - clampedRadii.bottomRight;
+      const F32 starting_y = rect.y + clamped_radii.topRight;
+      const F32 length     = rect.h - clamped_radii.topRight - clamped_radii.bottomRight;
 
       Rect line = {
           starting_x,
@@ -389,8 +366,8 @@ namespace {
     }
 
     if (clay_data->width.top > 0) {
-      const F32 starting_x = rect.x + clampedRadii.topLeft;
-      const F32 length     = rect.w - clampedRadii.topLeft - clampedRadii.topRight;
+      const F32 starting_x = rect.x + clamped_radii.topLeft;
+      const F32 length     = rect.w - clamped_radii.topLeft - clamped_radii.topRight;
 
       Rect line = {
           starting_x,
@@ -403,9 +380,9 @@ namespace {
     }
 
     if (clay_data->width.bottom > 0) {
-      const F32 starting_x = rect.x + clampedRadii.bottomLeft;
+      const F32 starting_x = rect.x + clamped_radii.bottomLeft;
       const F32 starting_y = rect.y + rect.h - static_cast<F32>(clay_data->width.bottom);
-      const F32 length     = rect.w - clampedRadii.bottomLeft - clampedRadii.bottomRight;
+      const F32 length     = rect.w - clamped_radii.bottomLeft - clamped_radii.bottomRight;
 
       Rect line = {
           starting_x,
@@ -419,11 +396,11 @@ namespace {
 
     // corners
     if (clay_data->cornerRadius.topLeft > 0) {
-      const F32 centerX = rect.x + clampedRadii.topLeft - 1;
-      const F32 centerY = rect.y + clampedRadii.topLeft;
+      const F32 center_x = rect.x + clamped_radii.topLeft - 1;
+      const F32 center_y = rect.y + clamped_radii.topLeft;
       draw_arc(command_buffer,
-               glm::vec2{centerX, centerY},
-               clampedRadii.topLeft,
+               glm::vec2{center_x, center_y},
+               clamped_radii.topLeft,
                180.0f,
                270.0f,
                clay_data->width.top,
@@ -431,12 +408,12 @@ namespace {
     }
 
     if (clay_data->cornerRadius.topRight > 0) {
-      const F32 centerX = rect.x + rect.w - clampedRadii.topRight - 1;
-      const F32 centerY = rect.y + clampedRadii.topRight;
+      const F32 center_x = rect.x + rect.w - clamped_radii.topRight - 1;
+      const F32 center_y = rect.y + clamped_radii.topRight;
 
       draw_arc(command_buffer,
-               glm::vec2{centerX, centerY},
-               clampedRadii.topRight,
+               glm::vec2{center_x, center_y},
+               clamped_radii.topRight,
                270.0f,
                360.0f,
                clay_data->width.top,
@@ -444,11 +421,11 @@ namespace {
     }
 
     if (clay_data->cornerRadius.bottomLeft > 0) {
-      const F32 centerX = rect.x + clampedRadii.bottomLeft - 1;
-      const F32 centerY = rect.y + rect.h - clampedRadii.bottomLeft - 1;
+      const F32 center_x = rect.x + clamped_radii.bottomLeft - 1;
+      const F32 center_y = rect.y + rect.h - clamped_radii.bottomLeft - 1;
       draw_arc(command_buffer,
-               glm::vec2{centerX, centerY},
-               clampedRadii.bottomLeft,
+               glm::vec2{center_x, center_y},
+               clamped_radii.bottomLeft,
                90.0f,
                180.0f,
                clay_data->width.bottom,
@@ -456,11 +433,11 @@ namespace {
     }
 
     if (clay_data->cornerRadius.bottomRight > 0) {
-      const F32 centerX = rect.x + rect.w - clampedRadii.bottomRight - 1;
-      const F32 centerY = rect.y + rect.h - clampedRadii.bottomRight - 1;
+      const F32 center_x = rect.x + rect.w - clamped_radii.bottomRight - 1;
+      const F32 center_y = rect.y + rect.h - clamped_radii.bottomRight - 1;
       draw_arc(command_buffer,
-               glm::vec2{centerX, centerY},
-               clampedRadii.bottomRight,
+               glm::vec2{center_x, center_y},
+               clamped_radii.bottomRight,
                0.0f,
                90.0f,
                clay_data->width.bottom,
@@ -473,26 +450,27 @@ namespace {
 void ui::init(SDL_Window* sdl_window, vulkan::RenderPassHandle render_pass) {
   _sdl_window = sdl_window;
 
+  _ui_pipeline = vulkan::pipelines::by_name("ui_pipeline");
+
   VkDescriptorSetLayout ubo_layouts[] = {
       vulkan::ubos::global_ubo_layout(),
       vulkan::ubos::model_ubo_layout(),
       vulkan::ubos::textures_ubo_layout(),
   };
 
-  vulkan::pipelines::create(
-      {
-          .name                   = "ui_pipeline",
-          .vertex_shader_fpath    = "vert_ui.spv",
-          .fragment_shader_fpath  = "frag_ui.spv",
-          .binding_description    = vulkan::VERTEX2D_COLOR_TEX_BINDING_DESC,
-          .attribute_descriptions = vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC,
-          .attribute_descriptions_format_count =
-              array::size(vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC),
-          .ubo_layouts           = ubo_layouts,
-          .ubo_layouts_count     = array::size(ubo_layouts),
-          .disable_depth_testing = true,
-      },
-      render_pass);
+  vulkan::pipelines::create(render_pass,
+                            {
+                                .name                   = "ui_pipeline",
+                                .vertex_shader_fpath    = "vert_ui.spv",
+                                .fragment_shader_fpath  = "frag_ui.spv",
+                                .binding_description    = vulkan::VERTEX2D_COLOR_TEX_BINDING_DESC,
+                                .attribute_descriptions = vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC,
+                                .attribute_descriptions_format_count =
+                                    array::size(vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC),
+                                .ubo_layouts           = ubo_layouts,
+                                .ubo_layouts_count     = array::size(ubo_layouts),
+                                .disable_depth_testing = true,
+                            });
 
   U64        mem_size    = Clay_MinMemorySize();
   Clay_Arena clay_memory = Clay_Arena{
@@ -514,15 +492,27 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
 
   auto clay_commands = _ui_builder_fn();
 
+  render::bind_pipeline(_ui_pipeline);
+
   int width, height;
   SDL_GetWindowSize(_sdl_window, &width, &height);
 
   auto proj =
-      glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, -1.0f, 1.0f);
+      glm::ortho(0.0f, static_cast<F32>(width), static_cast<F32>(height), 0.0f, -1.0f, 1.0f);
+  // proj[1][1] *= -1;
 
   auto view = glm::mat4(1.0f);
 
   render::set_view_projection(view, proj);
+    // auto model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
+    //              glm::scale(glm::mat4(1.0f), glm::vec3(rect.w, rect.h, 1.0f));
+  auto model = glm::mat4(1.0f);
+  render::set_model(model);
+
+  printf("ui:\n");
+  printf("view: %s\n", glm::to_string(view).c_str());
+  printf("proj: %s\n", glm::to_string(proj).c_str());
+  printf("model: %s\n", glm::to_string(model).c_str());
 
   for (size_t i = 0; i < clay_commands.length; i++) {
     auto clay_command = Clay_RenderCommandArray_Get(&clay_commands, i);
@@ -536,10 +526,6 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
 
     printf("rect: x: %f y: %f, w: %f h: %f\n", rect.x, rect.y, rect.w, rect.h);
 
-    auto model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
-                 glm::scale(glm::mat4(1.0f), glm::vec3(rect.w, rect.h, 1.0f));
-
-    render::set_model(model);
 
     switch (clay_command->commandType) {
       case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {

@@ -19,7 +19,7 @@ layout(location = 1) out vec2 fragUV;
 layout(location = 2) flat out int fragTexIndex;
 
 void main() {
-    gl_Position = globalUBO.proj * modelUBO.model * vec4(inPosition, 0.0, 1.0);
+    gl_Position = globalUBO.proj * globalUBO.view * modelUBO.model * vec4(inPosition, 0.0, 1.0);
     fragColor = inColor;
     fragUV = inUV;
     fragTexIndex = modelUBO.textureIndex;

@@ -20,6 +20,15 @@ namespace meshes {
   create(vulkan::VertexBufferHandle vertex_buffer, vulkan::IndexBufferHandle index_buffer);
 
   template <typename VertexT>
+  MeshHandle create(const VertexT* vertices,
+                    const U32      vertices_size,
+                    const U32*     indices,
+                    const U32      indices_size) {
+    return create(vulkan::vertex_buffers::create(static_cast<const void*>(vertices), vertices_size * sizeof(VertexT)),
+                  vulkan::index_buffers::create(indices, indices_size));
+  }
+
+  template <typename VertexT>
   MeshHandle create(DynamicArray<VertexT>& vertices, DynamicArray<U32>& indices) {
     return create(vulkan::vertex_buffers::create(vertices), vulkan::index_buffers::create(indices));
   }

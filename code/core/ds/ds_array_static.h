@@ -33,8 +33,8 @@ namespace array {
   }
 
   // native arrays
-  template <typename T, size_t SIZE>
-  U32 size(const T (&array)[SIZE]) {
+  template <typename T, U32 SIZE>
+  const U32 size(const T (&array)[SIZE]) {
     return SIZE;
   }
 
@@ -48,4 +48,3 @@ namespace array {
     return sizeof(array[0]);
   }
 }
-

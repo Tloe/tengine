@@ -18,7 +18,7 @@ namespace vulkan {
       bool                                     disable_depth_testing = false;
     };
 
-    PipelineHandle create(Settings settings, RenderPassHandle render_pass);
+    PipelineHandle create(RenderPassHandle render_pass, Settings settings);
     void           cleanup(PipelineHandle pipeline);
     void           cleanup();
 

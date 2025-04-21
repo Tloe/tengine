@@ -90,15 +90,14 @@ Clay_RenderCommandArray build_ui() {
   /*   } */
   /* } */
 
-  Clay_RenderCommandArray renderCommands = Clay_EndLayout();
-  for (I32 i = 0; i < renderCommands.length; i++) {
-    Clay_RenderCommandArray_Get(&renderCommands, i)->boundingBox.y += 0;
+  Clay_RenderCommandArray clay_commands = Clay_EndLayout();
+  for (I32 i = 0; i < clay_commands.length; i++) {
+    Clay_RenderCommandArray_Get(&clay_commands, i)->boundingBox.y += 0;
   }
-  return renderCommands;
+  return clay_commands;
 }
 
 int main() {
-
   VkDescriptorSetLayout ubo_layouts[] = {
       vulkan::ubos::global_ubo_layout(),
       vulkan::ubos::model_ubo_layout(),
@@ -141,7 +140,7 @@ int main() {
   auto mesh = meshes::create(vertices, indices);
 
   auto view = glm::mat4(1.0f);
-  auto proj = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+  auto proj = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
   proj[1][1] *= -1;
 
   textures::set_textures(array::init<vulkan::TextureHandle>(mem_render_resource, {texture}));
@@ -160,6 +159,11 @@ int main() {
 
     render::set_view_projection(view, proj);
     render::set_model(model);
+
+    printf("main:\n");
+    printf("view: %s\n", glm::to_string(view).c_str());
+    printf("proj: %s\n", glm::to_string(proj).c_str());
+    printf("model: %s\n", glm::to_string(model).c_str());
 
     r++;
     U8 g = 0;
