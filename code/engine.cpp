@@ -1,11 +1,14 @@
 #include "engine.h"
 
 #include "arena.h"
+#include "fonts.h"
 #include "render.h"
 #include "types.h"
 #include "ui.h"
 
+#include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_timer.h>
 #include <cstdio>
@@ -19,16 +22,19 @@ namespace {
   U64           fps_last_time;
 
   SDL_Window* sdl_window;
-} // namespace
+}
 
-const engine::State* engine::init(const render::Settings& render_settings) {
+const engine::State* engine::init(const engine::Setting& settings) {
+  SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
+  SDL_SetHint(SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1");
+
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
     printf("failed to init SDL3: %s", SDL_GetError());
     exit(0);
   }
 
   sdl_window =
-      SDL_CreateWindow("tengine", render_settings.width, render_settings.height, SDL_WINDOW_VULKAN);
+      SDL_CreateWindow("tengine", settings.render.width, settings.render.height, SDL_WINDOW_VULKAN);
 
   if (!sdl_window) {
     printf("failed to create SDL3 window: %s", SDL_GetError());
@@ -39,7 +45,7 @@ const engine::State* engine::init(const render::Settings& render_settings) {
 
   previous_time = fps_last_time = SDL_GetPerformanceCounter();
 
-  render::init(render_settings, sdl_window);
+  render::init(settings.render, sdl_window);
 
   return &state;
 }
@@ -50,7 +56,7 @@ void engine::cleanup() {
   ui::cleanup_frame();
 
   SDL_DestroyWindow(sdl_window);
-
+  SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
   SDL_Quit();
 }
 

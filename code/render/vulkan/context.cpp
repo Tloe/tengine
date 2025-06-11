@@ -88,7 +88,7 @@ namespace {
                                  &graphics_family_index,
                                  &present_family_index);
 
-    auto unique_queue_families = array::init<U32>(arena::scratch());
+    auto unique_queue_families = S_DARRAY_EMPTY(U32);
 
     array::push_back_unique(unique_queue_families, graphics_family_index);
     array::push_back_unique(unique_queue_families, present_family_index);
@@ -191,8 +191,11 @@ void vulkan::context::init(SDL_Window* window, bool debug) {
   app_info.apiVersion         = VK_API_VERSION_1_2;
 
   VkInstanceCreateInfo instance_create_info{};
-  instance_create_info.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  instance_create_info.pApplicationInfo = &app_info;
+  instance_create_info.sType               = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+  instance_create_info.pApplicationInfo    = &app_info;
+  const char* layers[]                     = {"VK_LAYER_RENDERDOC_Capture"};
+  instance_create_info.enabledLayerCount     = 1;
+  instance_create_info.ppEnabledLayerNames = layers;
 
   auto instance_extensions = vulkan::required_instance_extension(debug);
 

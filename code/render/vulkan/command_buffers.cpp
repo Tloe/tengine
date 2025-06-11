@@ -2,6 +2,7 @@
 
 #include "context.h"
 #include "ds_hashmap.h"
+#include "handle.h"
 #include "handles.h"
 #include "types.h"
 #include "vulkan.h"
@@ -14,7 +15,7 @@ namespace {
   HashMap16<VkCommandBuffer> command_buffers = hashmap::init16<VkCommandBuffer>(mem_render);
 
   VkCommandPool command_pool      = VK_NULL_HANDLE;
-  U16           next_handle_value = 0;
+  handles::Allocator<vulkan::CommandBufferHandle, U8, 20> _handles;
 }
 
 void vulkan::command_buffers::init() {
@@ -45,35 +46,36 @@ vulkan::CommandBufferHandle vulkan::command_buffers::create() {
   alloc_info.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   alloc_info.commandBufferCount = 1;
 
-  CommandBufferHandle handle{.value = next_handle_value++};
-  auto command_buffer = hashmap::insert(::command_buffers, handle.value, VkCommandBuffer{});
+  auto command_buffer = handles::next(_handles);
+
+  auto vk_command_buffer = hashmap::insert(::command_buffers, command_buffer.value, VkCommandBuffer{});
 
   ASSERT_SUCCESS(
       "failed to allocate command buffers!",
-      vkAllocateCommandBuffers(vulkan::_ctx.logical_device, &alloc_info, command_buffer));
+      vkAllocateCommandBuffers(vulkan::_ctx.logical_device, &alloc_info, vk_command_buffer));
 
-  return handle;
+  return command_buffer;
 }
 
 VkCommandBuffer*
-vulkan::command_buffers::begin(CommandBufferHandle handle, VkCommandBufferUsageFlags usage_flags) {
+vulkan::command_buffers::begin(CommandBufferHandle command_buffer, VkCommandBufferUsageFlags usage_flags) {
   VkCommandBufferBeginInfo begin_info{};
   begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   begin_info.flags = usage_flags;
 
   ASSERT_SUCCESS(
       "failed to begin command buffers!",
-      vkBeginCommandBuffer(*hashmap::value(::command_buffers, handle.value), &begin_info));
+      vkBeginCommandBuffer(*hashmap::value(::command_buffers, command_buffer.value), &begin_info));
 
-  return hashmap::value(::command_buffers, handle.value);
+  return hashmap::value(::command_buffers, command_buffer.value);
 }
 
 void vulkan::command_buffers::reset(CommandBufferHandle handle) {
   vkResetCommandBuffer(*hashmap::value(::command_buffers, handle.value), 0);
 }
 
-void vulkan::command_buffers::submit(CommandBufferHandle handle) {
-  auto buffer = hashmap::value(::command_buffers, handle.value);
+void vulkan::command_buffers::submit(CommandBufferHandle command_buffer) {
+  auto buffer = hashmap::value(::command_buffers, command_buffer.value);
 
   vkEndCommandBuffer(*buffer);
 
@@ -86,18 +88,20 @@ void vulkan::command_buffers::submit(CommandBufferHandle handle) {
   vkQueueWaitIdle(vulkan::_ctx.graphics_queue);
 }
 
-void vulkan::command_buffers::cleanup(CommandBufferHandle handle) {
+void vulkan::command_buffers::cleanup(CommandBufferHandle command_buffer) {
   vkFreeCommandBuffers(vulkan::_ctx.logical_device,
                        command_pool,
                        1,
-                       hashmap::value(::command_buffers, handle.value));
+                       hashmap::value(::command_buffers, command_buffer.value));
+
+  handles::free(_handles,command_buffer);
 }
 
-void vulkan::command_buffers::submit_and_cleanup(vulkan::CommandBufferHandle handle) {
-  submit(handle);
-  cleanup(handle);
+void vulkan::command_buffers::submit_and_cleanup(vulkan::CommandBufferHandle command_buffer) {
+  submit(command_buffer);
+  cleanup(command_buffer);
 }
 
-VkCommandBuffer* vulkan::command_buffers::buffer(CommandBufferHandle handle) {
-  return hashmap::value(::command_buffers, handle.value);
+VkCommandBuffer* vulkan::command_buffers::buffer(CommandBufferHandle command_buffer) {
+  return hashmap::value(::command_buffers, command_buffer.value);
 }

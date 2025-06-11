@@ -9,39 +9,32 @@
 #include <vulkan/vulkan_core.h>
 
 namespace vulkan {
+  struct GlobalUBO {
+    glm::mat4 view;
+    glm::mat4 proj;
+  };
+
   namespace ubos {
     struct Settings {
-      U32 ubo_count = 0;
-      U32 
+      U32 ubo_count         = 0;
+      U32 max_textures      = 0;
+      U32 texture_set_count = 0;
     };
 
-    struct GlobalUBO {
-      glm::mat4 view;
-      glm::mat4 proj;
-    };
-
-    struct ModelUBO {
-      glm::mat4 model;
-      U32       texture_index;
-    };
-
-    struct PushConstants {
-      int texture_index;
-    };
-
-    void init(U32 max_textures, U8 max_sets);
+    void init(Settings settings);
     void cleanup();
 
-    void set_global_ubo(GlobalUBO data);
-    void set_model_ubo(ModelUBO data);
-    void set_textures(DynamicArray<vulkan::TextureHandle> textures);
+    UBOHandle create_ubo(U8 set_index, U32 byte_size, U32 descriptor_count = 1);
+    UBOHandle create_texture_set(U8 set_index, U32 texture_count);
 
-    void bind_global_ubo(CommandBufferHandle command_buffer, PipelineHandle pipeline);
-    void bind_model_ubo(CommandBufferHandle command_buffer, PipelineHandle pipeline);
-    void bind_textures(CommandBufferHandle command_buffer, PipelineHandle pipeline);
+    void cleanup(UBOHandle ubo);
 
-    VkDescriptorSetLayout global_ubo_layout();
-    VkDescriptorSetLayout model_ubo_layout();
-    VkDescriptorSetLayout textures_ubo_layout();
+    void set_ubo(UBOHandle ubo, void* data);
+    void set_textures(UBOHandle ubo, DynamicArray<vulkan::TextureHandle> textures);
+    U32  texture_index(vulkan::TextureHandle texture);
+
+    void bind(UBOHandle ubo, CommandBufferHandle command_buffer, PipelineHandle pipeline);
+
+    VkDescriptorSetLayout descriptor_set_layout(UBOHandle ubo);
   }
 }

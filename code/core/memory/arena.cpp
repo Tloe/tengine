@@ -36,20 +36,24 @@ namespace {
     if (modulo != 0) {
       p += align - modulo;
     }
+
     return p;
   }
 }
 
 ArenaHandle arena::set(const char* name, U8* mem, U32 mem_size) {
-  ArenaHandle handle = by_name(name);
+  U8 index = 0;
+  if (strcmp(name, "scratch") != 0) {
+    index = by_name(name).value;
+  }
 
-  _arenas[handle.value].name          = name;
-  _arenas[handle.value].a.buf         = mem;
-  _arenas[handle.value].a.buf_len     = mem_size;
-  _arenas[handle.value].a.curr_offset = 0;
-  _arenas[handle.value].a.prev_offset = 0;
+  _arenas[index].name          = name;
+  _arenas[index].a.buf         = mem;
+  _arenas[index].a.buf_len     = mem_size;
+  _arenas[index].a.curr_offset = 0;
+  _arenas[index].a.prev_offset = 0;
 
-  return handle;
+  return ArenaHandle{.value = index};
 }
 
 void arena::set_scratch(U8* mem, U32 size) {
@@ -98,7 +102,7 @@ U8* arena::alloc(ArenaHandle handle, U32 size, U8 align) {
   U32  offset   = align_forward(curr_ptr, align);
   offset -= reinterpret_cast<uintptr_t>(a->buf);
 
-  if (offset + size <= a->buf_len) {
+  if (offset + size < a->buf_len) {
     U8* ptr        = &a->buf[offset];
     a->prev_offset = offset;
     a->curr_offset = offset + size;

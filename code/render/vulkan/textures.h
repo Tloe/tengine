@@ -6,12 +6,15 @@
 #include <vulkan/vulkan_core.h>
 
 namespace vulkan::textures {
-TextureHandle create_mipmaped(const char *fpath);
-TextureHandle create_with_staging(U32 w, U32 h);
-void cleanup(TextureHandle handle);
-void set(TextureHandle handle, DynamicArray<U32> &data);
+  TextureHandle create(U32 w, U32 h, U8* data, U32 byte_size ,VkFormat format);
+  TextureHandle create_with_staging(U32 w, U32 h);
 
-void set_sampler(TextureHandle handle, vulkan::TextureSamplerHandle sampler);
-TextureSamplerHandle sampler(TextureHandle handle);
+  TextureHandle load_mipmaped(const char* fpath);
 
-} // namespace vulkan::textures
+  void cleanup(TextureHandle texture);
+  void set_data(TextureHandle texture, U32* data, U32 byte_size);
+
+  void                 set_sampler(TextureHandle texture, vulkan::TextureSamplerHandle sampler);
+  TextureSamplerHandle sampler(TextureHandle texture);
+
+}

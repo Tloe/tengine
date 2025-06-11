@@ -1,16 +1,9 @@
 #include "vertex_buffers.h"
 
-#include "ds_hashmap.h"
-#include "types.h"
 #include "vulkan/buffers.h"
 #include "vulkan/handles.h"
 
 #include <vulkan/vulkan_core.h>
-
-namespace {
-  ArenaHandle    mem_render_resource = arena::by_name("render_resources");
-  HashMap16<U32> vertex_counts       = hashmap::init16<U32>(mem_render_resource);
-}
 
 vulkan::VertexBufferHandle vulkan::vertex_buffers::create(const void* vertices, VkDeviceSize byte_size) {
   auto staging =
@@ -29,15 +22,10 @@ vulkan::VertexBufferHandle vulkan::vertex_buffers::create(const void* vertices, 
 
   buffers::cleanup(staging);
 
-  hashmap::insert(vertex_counts, vertex_buffer.value);
-
   return VertexBufferHandle{.value = vertex_buffer.value};
 }
 
 void vulkan::vertex_buffers::cleanup(VertexBufferHandle handle) {
-  buffers::cleanup(BufferHandle{.value = handle.value});
+  buffers::cleanup(handle);
 }
 
-U32 vulkan::vertex_buffers::vertex_count(VertexBufferHandle handle) {
-  return *hashmap::value(vertex_counts, handle.value);
-}

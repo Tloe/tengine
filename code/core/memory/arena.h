@@ -4,8 +4,9 @@
 #include "types.h"
 
 #include <cstddef>
+#include <cstdio>
 
-#define INIT_ARENA(NAME, SIZE)                                                                     \
+#define ARENA_INIT(NAME, SIZE)                                                                     \
   U8          memory_##NAME##_##__LINE__[SIZE];                                                    \
   ArenaHandle a_##NAME##_##__LINE__ = arena::set(#NAME, memory_##NAME##_##__LINE__, SIZE);
 
@@ -16,11 +17,11 @@
 /*     a; \ */
 /*   }) */
 
-#define SET_SCRATCH(SIZE)                                                                          \
-  ({                                                                                               \
-    U8 memory[SIZE];                                                                               \
-    arena::set_scratch(memory, SIZE);                                                              \
-  })
+// #define ARENA_SET_SCRATCH(SIZE)                                                                    \
+//   ({                                                                                               \
+//     U8 memory[SIZE];                                                                               \
+//     arena::set_scratch(memory, SIZE);                                                              \
+//   })
 
 struct Arena {
   U8* buf;

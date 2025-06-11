@@ -3,12 +3,13 @@
 #include "arena.h"
 #include "ds_array_dynamic.h"
 #include "ds_array_static.h"
+#include "ds_string.h"
+#include "fonts.h"
 #include "handles.h"
 #include "meshes.h"
 #include "render.h"
 #include "vulkan/command_buffers.h"
 #include "vulkan/handles.h"
-#include "vulkan/pipelines.h"
 #include "vulkan/ubos.h"
 #include "vulkan/vertex.h"
 
@@ -24,7 +25,7 @@
 namespace {
   ArenaHandle mem_ui = arena::by_name("render_ui");
 
-  auto _frame_meshes = array::init<MeshHandle>(mem_ui, 100);
+  auto _frame_meshes = A_DARRAY_CAP(MeshHandle, mem_ui, 100);
 
   ui::UiBuilderFn _ui_builder_fn;
 
@@ -33,39 +34,54 @@ namespace {
   vulkan::PipelineHandle _ui_pipeline;
 
   const U32 NUM_CIRCLE_SEGMENTS = 16;
-  const U32 FONT_ID             = 0;
+
+  auto _fonts = A_DARRAY(FontHandle, mem_ui);
+
+  vulkan::UBOHandle _global_ubo;
+  vulkan::UBOHandle _texture_ubo;
 
   struct Rect {
-    float x;
-    float y;
-    float w;
-    float h;
+    F32 x;
+    F32 y;
+    F32 w;
+    F32 h;
   };
 
-  /* static inline Clay_Dimensions */
-  /* sdl_measure_text_cb(Clay_StringSlice text, Clay_TextElementConfig* config, void* userData) { */
-  /*   TTF_Font** fonts = static_cast<TTF_Font**>(userData); */
-  /*   TTF_Font*  font  = fonts[config->fontId]; */
-  /*   I32        width, height; */
-  /*  */
-  /*   if (!TTF_GetStringSize(font, text.chars, text.length, &width, &height)) { */
-  /*     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to measure text: %s", SDL_GetError()); */
-  /*   } */
-  /*  */
-  /*   return Clay_Dimensions{(F32)width, (F32)height}; */
-  /* } */
-  /*  */
+  static inline Clay_Dimensions
+  clay_measure_text_fn(Clay_StringSlice text, Clay_TextElementConfig* config, void* userData) {
+    auto font = render::fonts::font(FontHandle{.value = config->fontId});
+
+    F32 x = 0.0f, y = 0.0f;
+    F32 max_x = 0.0f;
+    F32 max_y = 0.0f;
+
+    for (U32 i = 0; i < text.length; ++i) {
+      U8 cp = static_cast<U8>(text.chars[i]);
+      if (cp < font.first_codepoint || cp >= font.first_codepoint + font.codepoint_count) {
+        continue;
+      }
+
+      stbtt_packedchar* ch = &font.packed_chars[cp - font.first_codepoint];
+
+      F32 x0 = x + ch->xoff;
+      F32 y0 = y + ch->yoff;
+      F32 x1 = x0 + (ch->x1 - ch->x0);
+      F32 y1 = y0 + (ch->y1 - ch->y0);
+
+      if (x1 > max_x) max_x = x1;
+      if (y1 > max_y) max_y = y1;
+
+      x += ch->xadvance;
+    }
+
+    return Clay_Dimensions{max_x, max_y};
+  }
 
   void handle_clay_errors_cb(Clay_ErrorData errorData) {
     printf("clay error: %s", errorData.errorText.chars);
   }
 
-  void draw_fill_rounded_rect(vulkan::CommandBufferHandle command_buffer,
-                              const Rect                  rect,
-                              F32                         corner_radius,
-                              glm::vec4                   color) {
-    printf("COLOR: %s\n", glm::to_string(color).c_str());
-
+  void draw_fill_rounded_rect(const Rect rect, F32 corner_radius, glm::vec4 color) {
     U32 index_count = 0, vertex_count = 0;
 
     F32 min_radius     = std::min(rect.w, rect.h) / 2.0f;
@@ -107,11 +123,11 @@ namespace {
     };
 
     indices[index_count++] = 0;
-    indices[index_count++] = 1;
     indices[index_count++] = 3;
     indices[index_count++] = 1;
+    indices[index_count++] = 1;
+    indices[index_count++] = 3;
     indices[index_count++] = 2;
-    indices[index_count++] = 3;
 
     // define rounded corners as triangle fans
     const F32 step = (glm::pi<F32>() / 2) / num_circle_segments;
@@ -120,56 +136,69 @@ namespace {
       const F32 angle1 = (F32)i * step;
       const F32 angle2 = ((F32)i + 1.0f) * step;
 
-      for (int j = 0; j < 4; j++) { // Iterate over four corners
-        F32 cx, cy, sign_x, sign_y;
+      // Corner 0: top-left
+      F32 cx = rect.x + clamped_radius;
+      F32 cy = rect.y + clamped_radius;
+      // emit two arc vertices
+      vertices[vertex_count++] = {{cx + glm::cos(angle1) * clamped_radius * (-1),
+                                   cy + glm::sin(angle1) * clamped_radius * (-1)},
+                                  color,
+                                  {0, 0}};
+      vertices[vertex_count++] = {{cx + glm::cos(angle2) * clamped_radius * (-1),
+                                   cy + glm::sin(angle2) * clamped_radius * (-1)},
+                                  color,
+                                  {0, 0}};
+      indices[index_count++]   = 0;
+      indices[index_count++]   = vertex_count - 1;
+      indices[index_count++]   = vertex_count - 2;
 
-        switch (j) {
-          case 0:
-            cx     = rect.x + clamped_radius;
-            cy     = rect.y + clamped_radius;
-            sign_x = -1;
-            sign_y = -1;
-            break; // Top-left
-          case 1:
-            cx     = rect.x + rect.w - clamped_radius;
-            cy     = rect.y + clamped_radius;
-            sign_x = 1;
-            sign_y = -1;
-            break; // Top-right
-          case 2:
-            cx     = rect.x + rect.w - clamped_radius;
-            cy     = rect.y + rect.h - clamped_radius;
-            sign_x = 1;
-            sign_y = 1;
-            break; // Bottom-right
-          case 3:
-            cx     = rect.x + clamped_radius;
-            cy     = rect.y + rect.h - clamped_radius;
-            sign_x = -1;
-            sign_y = 1;
-            break; // Bottom-left
-          default:
-            return;
-        }
+      //  Corner 1: top-right
+      cx                       = rect.x + rect.w - clamped_radius;
+      cy                       = rect.y + clamped_radius;
+      vertices[vertex_count++] = {{cx + glm::cos(angle1) * clamped_radius * (+1),
+                                   cy + glm::sin(angle1) * clamped_radius * (-1)},
+                                  color,
+                                  {0, 0}};
+      vertices[vertex_count++] = {{cx + glm::cos(angle2) * clamped_radius * (+1),
+                                   cy + glm::sin(angle2) * clamped_radius * (-1)},
+                                  color,
+                                  {0, 0}};
+      // center vertex index = 1
+      indices[index_count++] = 1;
+      indices[index_count++] = vertex_count - 2;
+      indices[index_count++] = vertex_count - 1;
 
-        vertices[vertex_count++] = vulkan::Vertex2DColorTex{
-            {cx + glm::cos<F32>(angle1) * clamped_radius * sign_x,
-             cy + glm::sin<F32>(angle1) * clamped_radius * sign_y},
-            color,
-            {0, 0},
-        };
+      // Corner 2: bottom-right
+      cx                       = rect.x + rect.w - clamped_radius;
+      cy                       = rect.y + rect.h - clamped_radius;
+      vertices[vertex_count++] = {{cx + glm::cos(angle1) * clamped_radius * (+1),
+                                   cy + glm::sin(angle1) * clamped_radius * (+1)},
+                                  color,
+                                  {0, 0}};
+      vertices[vertex_count++] = {{cx + glm::cos(angle2) * clamped_radius * (+1),
+                                   cy + glm::sin(angle2) * clamped_radius * (+1)},
+                                  color,
+                                  {0, 0}};
+      // center vertex index = 2
+      indices[index_count++] = 2;
+      indices[index_count++] = vertex_count - 1;
+      indices[index_count++] = vertex_count - 2;
 
-        vertices[vertex_count++] = vulkan::Vertex2DColorTex{
-            {cx + glm::cos<F32>(angle2) * clamped_radius * sign_x,
-             cy + glm::sin<F32>(angle2) * clamped_radius * sign_y},
-            color,
-            {0, 0},
-        };
-
-        indices[index_count++] = j; // Connect to corresponding central rectangle vertex
-        indices[index_count++] = vertex_count - 2;
-        indices[index_count++] = vertex_count - 1;
-      }
+      // Corner 3: bottom-left
+      cx                       = rect.x + clamped_radius;
+      cy                       = rect.y + rect.h - clamped_radius;
+      vertices[vertex_count++] = {{cx + glm::cos(angle1) * clamped_radius * (-1),
+                                   cy + glm::sin(angle1) * clamped_radius * (+1)},
+                                  color,
+                                  {0, 0}};
+      vertices[vertex_count++] = {{cx + glm::cos(angle2) * clamped_radius * (-1),
+                                   cy + glm::sin(angle2) * clamped_radius * (+1)},
+                                  color,
+                                  {0, 0}};
+      // center vertex index = 3
+      indices[index_count++] = 3;
+      indices[index_count++] = vertex_count - 2;
+      indices[index_count++] = vertex_count - 1;
     }
 
     // Define edge rectangles
@@ -187,12 +216,12 @@ namespace {
     }; // TR
 
     indices[index_count++] = 0;
-    indices[index_count++] = vertex_count - 2; // TL
-    indices[index_count++] = vertex_count - 1; // TR
+    indices[index_count++] = vertex_count - 1; // TL
+    indices[index_count++] = vertex_count - 2; // TR
     indices[index_count++] = 1;
-    indices[index_count++] = 0;
-    indices[index_count++] = vertex_count - 1; // TR
-                                               //
+    indices[index_count++] = vertex_count - 1;
+    indices[index_count++] = 0; // TR
+                                //
     // Right edge
     vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x + rect.w, rect.y + clamped_radius},
@@ -207,11 +236,11 @@ namespace {
     }; // RB
 
     indices[index_count++] = 1;
-    indices[index_count++] = vertex_count - 2; // RT
-    indices[index_count++] = vertex_count - 1; // RB
+    indices[index_count++] = vertex_count - 1; // RT
+    indices[index_count++] = vertex_count - 2; // RB
     indices[index_count++] = 2;
-    indices[index_count++] = 1;
-    indices[index_count++] = vertex_count - 1; // RB
+    indices[index_count++] = vertex_count - 1;
+    indices[index_count++] = 1; // RB
 
     // Bottom edge
     vertices[vertex_count++] = vulkan::Vertex2DColorTex{
@@ -227,12 +256,12 @@ namespace {
     }; // BL
 
     indices[index_count++] = 2;
-    indices[index_count++] = vertex_count - 2; // BR
-    indices[index_count++] = vertex_count - 1; // BL
+    indices[index_count++] = vertex_count - 1; // BR
+    indices[index_count++] = vertex_count - 2; // BL
     indices[index_count++] = 3;
-    indices[index_count++] = 2;
-    indices[index_count++] = vertex_count - 1; // BL
-                                               //
+    indices[index_count++] = vertex_count - 1;
+    indices[index_count++] = 2; // BL
+                                //
     // Left edge
     vertices[vertex_count++] = vulkan::Vertex2DColorTex{
         {rect.x, rect.y + rect.h - clamped_radius},
@@ -246,20 +275,19 @@ namespace {
     }; // LT
 
     indices[index_count++] = 3;
-    indices[index_count++] = vertex_count - 2; // LB
-    indices[index_count++] = vertex_count - 1; // LT
+    indices[index_count++] = vertex_count - 1; // LB
+    indices[index_count++] = vertex_count - 2; // LT
     indices[index_count++] = 0;
-    indices[index_count++] = 3;
-    indices[index_count++] = vertex_count - 1; // LT
+    indices[index_count++] = vertex_count - 1;
+    indices[index_count++] = 3; // LT
 
     // Create Vulkan buffers and copy vertex/index data
-    auto mesh = meshes::create(vertices, total_vertices, indices, total_indices);
-    meshes::draw(command_buffer, mesh);
+    auto mesh = meshes::create(arena::frame(), vertices, total_vertices, indices, total_indices);
+    render::draw(mesh);
     array::push_back(_frame_meshes, mesh);
   }
 
-  void
-  draw_fill_rect(vulkan::CommandBufferHandle command_buffer, const Rect rect, glm::vec4 color) {
+  void draw_fill_rect(const Rect rect, glm::vec4 color) {
     vulkan::Vertex2DColorTex vertices[] = {
         {{rect.x, rect.y}, color, {0, 0}},
         {{rect.x + rect.w, rect.y}, color, {1, 0}},
@@ -267,59 +295,66 @@ namespace {
         {{rect.x, rect.y + rect.h}, color, {0, 1}},
     };
 
-    U32 indices[] = {0, 1, 3, 1, 2, 3};
+    U32 indices[] = {0, 3, 1, 1, 3, 2};
 
-    auto mesh = meshes::create(vertices, 4, indices, 6);
-    meshes::draw(command_buffer, mesh);
+    auto mesh = meshes::create(arena::frame(), vertices, 4, indices, 6);
+    render::draw(mesh);
     array::push_back(_frame_meshes, mesh);
   }
 
-  void draw_arc(vulkan::CommandBufferHandle command_buffer,
-                const glm::vec2             center,
-                const F32                   radius,
-                const F32                   startAngle,
-                const F32                   endAngle,
-                const F32                   thickness,
-                const glm::vec4             color) {
+  void draw_arc(const glm::vec2 center,
+                const F32       radius,
+                const F32       startAngle,
+                const F32       endAngle,
+                const F32       thickness,
+                const glm::vec4 color) {
+
     const float rad_start = startAngle * (glm::pi<F32>() / 180.0f);
     const float rad_end   = endAngle * (glm::pi<F32>() / 180.0f);
 
-    // Determine how many segments to use.
     const U32 num_circle_segments = std::max(NUM_CIRCLE_SEGMENTS, static_cast<U32>(radius * 1.5f));
     const F32 angle_step          = (rad_end - rad_start) / static_cast<float>(num_circle_segments);
-    const F32 thickness_step      = 0.4f; // Arbitrary value to space the rings.
 
-    // For each "ring" of the arc (to simulate thickness)...
-    for (F32 t = thickness_step; t < thickness - thickness_step; t += thickness_step) {
-      // Temporary container for this ring’s vertices.
-      printf("CHECK THESE SIZES 100 needed?");
-      auto vertices = array::init<vulkan::Vertex2DColorTex>(arena::frame(), 100);
+    auto vertices = F_DARRAY_CAP(vulkan::Vertex2DColorTex, (num_circle_segments + 1) * 2);
+    auto indices  = F_DARRAY_CAP(U32, num_circle_segments * 6);
 
-      const F32 clamped_radius = std::max(radius - t, 1.0f);
+    const F32 outer_radius = radius;
+    const F32 inner_radius = radius - thickness;
 
-      // Generate the points along the arc.
-      for (U32 i = 0; i <= num_circle_segments; i++) {
-        F32 angle = rad_start + i * angle_step;
-        F32 x     = center.x + std::cos(angle) * clamped_radius;
-        F32 y     = center.y + std::sin(angle) * clamped_radius;
-        // Create vertex with position and per-vertex color.
-        array::push_back(vertices,
-                         vulkan::Vertex2DColorTex{
-                             glm::vec2(std::round(x), std::round(y)),
-                             color,
-                             {0, 0},
-                         });
-      }
+    for (U32 i = 0; i <= num_circle_segments; i++) {
+      F32 angle = rad_start + i * angle_step;
+      F32 cos_a = std::cos(angle);
+      F32 sin_a = std::sin(angle);
 
-      auto mesh = meshes::create(vertices);
-      meshes::draw(command_buffer, mesh);
-      array::push_back(_frame_meshes, mesh);
+      glm::vec2 outer_pos = center + glm::vec2(cos_a, sin_a) * outer_radius;
+      glm::vec2 inner_pos = center + glm::vec2(cos_a, sin_a) * inner_radius;
+
+      array::push_back(vertices, vulkan::Vertex2DColorTex{outer_pos, color, {0, 0}});
+      array::push_back(vertices, vulkan::Vertex2DColorTex{inner_pos, color, {0, 0}});
     }
+
+    for (U32 i = 0; i < num_circle_segments; i++) {
+      U32 outer_curr = i * 2;
+      U32 inner_curr = i * 2 + 1;
+      U32 outer_next = (i + 1) * 2;
+      U32 inner_next = (i + 1) * 2 + 1;
+
+      // Create two triangles for each quad:
+      array::push_back(indices, outer_curr);
+      array::push_back(indices, inner_curr);
+      array::push_back(indices, outer_next);
+
+      array::push_back(indices, outer_next);
+      array::push_back(indices, inner_curr);
+      array::push_back(indices, inner_next);
+    }
+
+    auto mesh = meshes::create(arena::frame(), vertices, indices);
+    render::draw(mesh);
+    array::push_back(_frame_meshes, mesh);
   }
 
-  void draw_border(vulkan::CommandBufferHandle command_buffer,
-                   Rect                        rect,
-                   Clay_BorderRenderData*      clay_data) {
+  void draw_border(Rect& rect, Clay_BorderRenderData* clay_data) {
     const F32 min_radius = std::min(rect.w, rect.h) / 2.0f;
 
     const Clay_CornerRadius clamped_radii = {
@@ -347,7 +382,7 @@ namespace {
           length,
       };
 
-      draw_fill_rect(command_buffer, line, color);
+      draw_fill_rect(line, color);
     }
 
     if (clay_data->width.right > 0) {
@@ -362,7 +397,7 @@ namespace {
           length,
       };
 
-      draw_fill_rect(command_buffer, line, color);
+      draw_fill_rect(line, color);
     }
 
     if (clay_data->width.top > 0) {
@@ -376,7 +411,7 @@ namespace {
           static_cast<float>(clay_data->width.top),
       };
 
-      draw_fill_rect(command_buffer, line, color);
+      draw_fill_rect(line, color);
     }
 
     if (clay_data->width.bottom > 0) {
@@ -391,15 +426,14 @@ namespace {
           static_cast<float>(clay_data->width.bottom),
       };
 
-      draw_fill_rect(command_buffer, line, color);
+      draw_fill_rect(line, color);
     }
 
     // corners
     if (clay_data->cornerRadius.topLeft > 0) {
-      const F32 center_x = rect.x + clamped_radii.topLeft - 1;
+      const F32 center_x = rect.x + clamped_radii.topLeft;
       const F32 center_y = rect.y + clamped_radii.topLeft;
-      draw_arc(command_buffer,
-               glm::vec2{center_x, center_y},
+      draw_arc(glm::vec2{center_x, center_y},
                clamped_radii.topLeft,
                180.0f,
                270.0f,
@@ -408,11 +442,10 @@ namespace {
     }
 
     if (clay_data->cornerRadius.topRight > 0) {
-      const F32 center_x = rect.x + rect.w - clamped_radii.topRight - 1;
+      const F32 center_x = rect.x + rect.w - clamped_radii.topRight;
       const F32 center_y = rect.y + clamped_radii.topRight;
 
-      draw_arc(command_buffer,
-               glm::vec2{center_x, center_y},
+      draw_arc(glm::vec2{center_x, center_y},
                clamped_radii.topRight,
                270.0f,
                360.0f,
@@ -421,10 +454,9 @@ namespace {
     }
 
     if (clay_data->cornerRadius.bottomLeft > 0) {
-      const F32 center_x = rect.x + clamped_radii.bottomLeft - 1;
-      const F32 center_y = rect.y + rect.h - clamped_radii.bottomLeft - 1;
-      draw_arc(command_buffer,
-               glm::vec2{center_x, center_y},
+      const F32 center_x = rect.x + clamped_radii.bottomLeft;
+      const F32 center_y = rect.y + rect.h - clamped_radii.bottomLeft;
+      draw_arc(glm::vec2{center_x, center_y},
                clamped_radii.bottomLeft,
                90.0f,
                180.0f,
@@ -433,10 +465,9 @@ namespace {
     }
 
     if (clay_data->cornerRadius.bottomRight > 0) {
-      const F32 center_x = rect.x + rect.w - clamped_radii.bottomRight - 1;
-      const F32 center_y = rect.y + rect.h - clamped_radii.bottomRight - 1;
-      draw_arc(command_buffer,
-               glm::vec2{center_x, center_y},
+      const F32 center_x = rect.x + rect.w - clamped_radii.bottomRight;
+      const F32 center_y = rect.y + rect.h - clamped_radii.bottomRight;
+      draw_arc(glm::vec2{center_x, center_y},
                clamped_radii.bottomRight,
                0.0f,
                90.0f,
@@ -444,36 +475,125 @@ namespace {
                color);
     }
   }
-
 }
 
-void ui::init(SDL_Window* sdl_window, vulkan::RenderPassHandle render_pass) {
+void draw_text(Rect& rect, Clay_TextRenderData& clay_data) {
+  auto font = render::fonts::font(FontHandle{.value = clay_data.fontId});
+
+  glm::vec4 color = {clay_data.textColor.r / 255.0f,
+                     clay_data.textColor.g / 255.0f,
+                     clay_data.textColor.b / 255.0f,
+                     clay_data.textColor.a / 255.0f};
+
+  auto text =
+      string::init(arena::frame(), clay_data.stringContents.chars, clay_data.stringContents.length);
+
+  int quad_count = 0;
+  for (int i = 0; i < text._size; ++i) {
+    U8 codepoint = text._data[i];
+
+    if (codepoint >= font.first_codepoint &&
+        codepoint < font.first_codepoint + font.codepoint_count) {
+      ++quad_count;
+    }
+  }
+
+  if (quad_count == 0) return;
+
+  vulkan::Vertex2DColorTex vertices[quad_count * 4];
+  U32                      indices[quad_count * 6];
+
+  U32 vertex_count  = 0;
+  U32 indices_count = 0;
+
+  // calc max_glyph_height
+  F32 max_glyph_height = 0.0f;
+  for (int i = 0; i < text._size; ++i) {
+    U8 code_point = (unsigned char)text._data[i];
+    if (code_point < font.first_codepoint ||
+        code_point >= font.first_codepoint + font.codepoint_count) {
+      continue;
+    }
+
+    auto* pc = &font.packed_chars[code_point - font.first_codepoint];
+    F32   h  = (pc->y1 - pc->y0);
+
+    if (h > max_glyph_height) max_glyph_height = h;
+  }
+
+  F32 current_x = 0.0f;
+  F32 current_y = max_glyph_height;
+
+  for (int ci = 0; ci < text._size; ++ci) {
+    U8 codepoint = (unsigned char)text._data[ci];
+    if (codepoint < font.first_codepoint ||
+        codepoint >= font.first_codepoint + font.codepoint_count) {
+      continue;
+    }
+
+    stbtt_packedchar* packed_char = &font.packed_chars[codepoint - font.first_codepoint];
+
+    F32 x0 = current_x + packed_char->xoff;
+    F32 y0 = current_y + packed_char->yoff;
+    F32 x1 = x0 + (packed_char->x1 - packed_char->x0);
+    F32 y1 = y0 + (packed_char->y1 - packed_char->y0);
+
+    F32 s0 = packed_char->x0 / static_cast<F32>(font.bitmap_width);
+    F32 t0 = packed_char->y0 / static_cast<F32>(font.bitmap_height);
+    F32 s1 = packed_char->x1 / static_cast<F32>(font.bitmap_width);
+    F32 t1 = packed_char->y1 / static_cast<F32>(font.bitmap_height);
+
+    // emit quad verts with tex_index
+    vertices[vertex_count++] = {{x0, y0}, color, {s0, t0}};
+    vertices[vertex_count++] = {{x1, y0}, color, {s1, t0}};
+    vertices[vertex_count++] = {{x1, y1}, color, {s1, t1}};
+    vertices[vertex_count++] = {{x0, y1}, color, {s0, t1}};
+
+    // emit indices
+    U32 base                 = vertex_count - 4;
+    indices[indices_count++] = base + 0;
+    indices[indices_count++] = base + 2;
+    indices[indices_count++] = base + 1;
+    indices[indices_count++] = base + 0;
+    indices[indices_count++] = base + 3;
+    indices[indices_count++] = base + 2;
+
+    current_x += packed_char->xadvance;
+  }
+
+  auto mesh = meshes::create(arena::frame(), vertices, vertex_count, indices, indices_count);
+
+  float scale = clay_data.fontSize / font.pixel_height;
+  // glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
+  //                   glm::scale(glm::mat4(1.0f), glm::vec3(scale, -scale, 1.0f));
+  glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
+                    glm::scale(glm::mat4(1.0f), glm::vec3(scale, scale, 1.0f));
+  meshes::set_constants(mesh, model, 0);
+
+  render::draw(mesh);
+  array::push_back(_frame_meshes, mesh);
+}
+
+void ui::init(SDL_Window*              sdl_window,
+              vulkan::RenderPassHandle render_pass,
+              DynamicArray<String>&    font_paths) {
   _sdl_window = sdl_window;
 
-  _ui_pipeline = vulkan::pipelines::by_name("ui_pipeline");
+  _global_ubo  = vulkan::ubos::create_ubo(0, sizeof(vulkan::GlobalUBO));
+  _texture_ubo = vulkan::ubos::create_texture_set(1, font_paths._size);
 
-  VkDescriptorSetLayout ubo_layouts[] = {
-      vulkan::ubos::global_ubo_layout(),
-      vulkan::ubos::model_ubo_layout(),
-      vulkan::ubos::textures_ubo_layout(),
-  };
-
-  vulkan::pipelines::create(render_pass,
-                            {
-                                .name                   = "ui_pipeline",
-                                .vertex_shader_fpath    = "vert_ui.spv",
-                                .fragment_shader_fpath  = "frag_ui.spv",
-                                .binding_description    = vulkan::VERTEX2D_COLOR_TEX_BINDING_DESC,
-                                .attribute_descriptions = vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC,
-                                .attribute_descriptions_format_count =
-                                    array::size(vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC),
-                                .ubo_layouts           = ubo_layouts,
-                                .ubo_layouts_count     = array::size(ubo_layouts),
-                                .disable_depth_testing = true,
-                            });
+  _ui_pipeline = render::create_pipeline({
+      .vertex_shader_fpath                 = "vert_ui.spv",
+      .fragment_shader_fpath               = "frag_ui.spv",
+      .binding_description                 = vulkan::VERTEX2D_COLOR_TEX_BINDING_DESC,
+      .attribute_descriptions              = vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC,
+      .attribute_descriptions_format_count = array::size(vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC),
+      .ubos                                = S_DARRAY(vulkan::UBOHandle, _global_ubo, _texture_ubo),
+      .disable_depth_testing               = true,
+  });
 
   U64        mem_size    = Clay_MinMemorySize();
-  Clay_Arena clay_memory = Clay_Arena{
+  Clay_Arena clay_memory = {
       .capacity = mem_size,
       .memory   = arena::alloc<char>(mem_ui, mem_size),
   };
@@ -484,10 +604,29 @@ void ui::init(SDL_Window* sdl_window, vulkan::RenderPassHandle render_pass) {
                   Clay_Dimensions{static_cast<F32>(width), static_cast<F32>(height)},
                   Clay_ErrorHandler{handle_clay_errors_cb});
 
-  /* Clay_SetMeasureTextFunction(sdl_measure_text_cb, fonts); */
+  auto font_textures = S_DARRAY_SIZE(TextureHandle, font_paths._size);
+
+  for (U32 i = 0; i < font_paths._size; ++i) {
+    auto font              = render::fonts::load(font_paths._data[i]._data);
+    font_textures._data[i] = render::fonts::font(font).texture;
+    array::push_back(_fonts, font);
+  }
+
+  vulkan::ubos::set_textures(_texture_ubo, font_textures);
+
+  Clay_SetMeasureTextFunction(clay_measure_text_fn, nullptr);
 }
 
-void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
+void ui::cleanup() {
+  for (U32 i = 0; i < _fonts._size; ++i) {
+    render::fonts::cleanup(_fonts._data[i]);
+  }
+
+  vulkan::ubos::cleanup(_global_ubo);
+  vulkan::ubos::cleanup(_texture_ubo);
+}
+
+void ui::draw_frame() {
   if (!_ui_builder_fn) return;
 
   auto clay_commands = _ui_builder_fn();
@@ -497,22 +636,10 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
   int width, height;
   SDL_GetWindowSize(_sdl_window, &width, &height);
 
-  auto proj =
-      glm::ortho(0.0f, static_cast<F32>(width), static_cast<F32>(height), 0.0f, -1.0f, 1.0f);
-  // proj[1][1] *= -1;
-
-  auto view = glm::mat4(1.0f);
-
-  render::set_view_projection(view, proj);
-    // auto model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
-    //              glm::scale(glm::mat4(1.0f), glm::vec3(rect.w, rect.h, 1.0f));
-  auto model = glm::mat4(1.0f);
-  render::set_model(model);
-
-  printf("ui:\n");
-  printf("view: %s\n", glm::to_string(view).c_str());
-  printf("proj: %s\n", glm::to_string(proj).c_str());
-  printf("model: %s\n", glm::to_string(model).c_str());
+  render::set_view_projection(
+      _global_ubo,
+      glm::mat4(1.0f),
+      glm::ortho(0.0f, static_cast<F32>(width), static_cast<F32>(height), 0.0f, -1.0f, 1.0f));
 
   for (size_t i = 0; i < clay_commands.length; i++) {
     auto clay_command = Clay_RenderCommandArray_Get(&clay_commands, i);
@@ -524,9 +651,6 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
         .h = clay_command->boundingBox.height,
     };
 
-    printf("rect: x: %f y: %f, w: %f h: %f\n", rect.x, rect.y, rect.w, rect.h);
-
-
     switch (clay_command->commandType) {
       case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
         Clay_RectangleRenderData* config = &clay_command->renderData.rectangle;
@@ -537,24 +661,18 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
                            config->backgroundColor.a / 255.0f};
 
         if (config->cornerRadius.topLeft > 0) {
-          printf("DRAW ROUNDED\n");
-          draw_fill_rounded_rect(command_buffer, rect, config->cornerRadius.topLeft, color);
+          draw_fill_rounded_rect(rect, config->cornerRadius.topLeft, color);
         } else {
-          printf("DRAW RECT\n");
-          draw_fill_rect(command_buffer, rect, color);
+          draw_fill_rect(rect, color);
         }
       } break;
       case CLAY_RENDER_COMMAND_TYPE_TEXT: {
-        printf("RENDER TEXT\n");
-        // Vulkan text rendering requires a separate text rendering system (e.g., Signed Distance
-        // Fields or bitmap fonts)
+        draw_text(rect, clay_command->renderData.text);
       } break;
       case CLAY_RENDER_COMMAND_TYPE_BORDER: {
-        printf("RENDER BORDER\n");
-        draw_border(command_buffer, rect, &clay_command->renderData.border);
+        draw_border(rect, &clay_command->renderData.border);
       } break;
       case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START: {
-        printf("RENDER SCISSOR START\n");
         VkRect2D scissor = {
             {
                 static_cast<I32>(rect.x),
@@ -566,38 +684,33 @@ void ui::draw_frame(vulkan::CommandBufferHandle command_buffer) {
             },
         };
 
-        auto vk_command_buffer = *vulkan::command_buffers::buffer(command_buffer);
+        auto vk_command_buffer = *vulkan::command_buffers::buffer(render::current_command_buffer());
 
         vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
       } break;
       case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END: {
-        printf("RENDER SCISSOR END\n");
         VkRect2D scissor = {{0, 0}, {UINT32_MAX, UINT32_MAX}};
 
-        auto vk_command_buffer = *vulkan::command_buffers::buffer(command_buffer);
+        auto vk_command_buffer = *vulkan::command_buffers::buffer(render::current_command_buffer());
 
         vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
       } break;
       case CLAY_RENDER_COMMAND_TYPE_IMAGE: {
-        printf("RENDER IMAGE\n");
         // Vulkan texture rendering (bind image and draw quad)
       } break;
       case CLAY_RENDER_COMMAND_TYPE_NONE:
-        printf("RENDER NONE\n");
         break;
       case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
-        printf("RENDER CUSTOM\n");
         break;
     }
   }
-
-  printf("END UI FRAME\n\n");
 }
 
 void ui::cleanup_frame() {
   for (U32 i = 0; i < _frame_meshes._size; ++i) {
     meshes::cleanup(_frame_meshes._data[i]);
   }
+
   array::resize(_frame_meshes, 0);
 }
 

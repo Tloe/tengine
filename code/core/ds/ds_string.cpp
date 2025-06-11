@@ -41,6 +41,17 @@ String string::init(ArenaHandle arena_handle, const String& str) {
   return s;
 }
 
+String string::init(ArenaHandle arena_handle, const char* chars, U32 size) {
+  String s{
+      ._size         = size,
+      ._data         = arena::alloc<char>(arena_handle, size + 1),
+      ._arena_handle = arena_handle,
+  };
+  strncpy(s._data, chars, size);
+
+  return s;
+}
+
 String string::init(ArenaHandle arena_handle, const char c) {
   String s{
       ._size         = 1,
@@ -125,3 +136,4 @@ String& operator+=(String& lhs, const char* rhs) {
 
   return lhs;
 }
+

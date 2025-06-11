@@ -1,15 +1,18 @@
 add_library(render)
 
 set(HEADERS
-    stb_image/stb_image.h
+    stb/stb_image.h
+    stb/stb_truetype.h
     tiny_obj_loader/tiny_obj_loader.h
     textures.h
     meshes.h
+    fonts.h
     ui.h
     render.h)
 set(SOURCES
     textures.cpp
     meshes.cpp
+    fonts.cpp
     ui.cpp
     render.cpp)
 

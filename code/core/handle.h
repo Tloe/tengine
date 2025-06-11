@@ -3,9 +3,12 @@
 #include "ds_bitarray.h"
 
 #include <cassert>
+#include <cstdio>
+
 template <typename Tag, typename T, T default_value>
 struct Handle {
-  T value = default_value;
+  I8 arena_index = -1;
+  T  value       = default_value;
 };
 
 template <typename Tag, typename T, T default_value>
@@ -20,7 +23,7 @@ operator!=(const Handle<Tag, T, default_value>& lhs, const Handle<Tag, T, defaul
   return lhs.value != rhs.value;
 }
 
-namespace handle {
+namespace handles {
   template <typename Tag, typename T, T default_value>
   bool invalid(Handle<Tag, T, default_value> handle) {
     return handle.value == default_value;
@@ -35,6 +38,7 @@ namespace handle {
   template <typename Handle, typename ValueT, U32 MAX>
   Handle next(Allocator<Handle, ValueT, MAX>& ha) {
     U32 limit = MAX;
+
     for (U32 i = 0; i < limit; ++i) {
       ValueT value = (ha.next_hint + i) % limit;
       if (!bitarray::get(ha.values, value)) {
@@ -56,7 +60,7 @@ namespace handle {
     bitarray::clear(ha.values, handle.value);
 
     if (handle.value < ha.next_hint) {
-      ha.next_hint = handle;
+      ha.next_hint = handle.value;
     }
   }
 

@@ -1,3 +1,4 @@
+#include "../resource_registry.h"
 #include "arena.h"
 #include "ds_array_dynamic.h"
 #include "ds_hashmap.h"
@@ -7,6 +8,7 @@
 #include "vulkan/command_buffers.h"
 #include "vulkan/glm_includes.h"
 #include "vulkan/handles.h"
+#include "vulkan/pipelines.h"
 #include "vulkan/vertex.h"
 
 #include <meshes.h>
@@ -16,10 +18,18 @@
 #include <tiny_obj_loader/tiny_obj_loader.h>
 
 namespace {
-  ArenaHandle     mem_render_resource = arena::by_name("render_resources");
-  HashMap16<Mesh> _meshes             = hashmap::init16<Mesh>(mem_render_resource);
-  U16             next_handle_value   = 0;
-} // namespace
+  struct Mesh {
+    vulkan::VertexBufferHandle vertex_buffer;
+    U32                        vertex_count;
+    vulkan::IndexBufferHandle  index_buffer;
+    U32                        index_count;
+    MeshGPUConstants           gpu_constants;
+  };
+
+  ArenaHandle mem_render_resource = arena::by_name("render_resources");
+
+  auto _meshes = resource_registry::init<Mesh, 200>(mem_render_resource, "Mesh");
+}
 
 namespace hashmap {
   template <>
@@ -42,7 +52,7 @@ namespace hashmap {
   }
 }
 
-MeshHandle meshes::create(const char* fpath) {
+MeshHandle meshes::create(ArenaHandle arena, const char* fpath) {
   tinyobj::attrib_t                attrib;
   std::vector<tinyobj::shape_t>    shapes;
   std::vector<tinyobj::material_t> materials;
@@ -58,8 +68,8 @@ MeshHandle meshes::create(const char* fpath) {
       shapes.size(),
       hashmap::hasher<const vulkan::VertexTex&>);
 
-  auto vertices = array::init<vulkan::VertexTex>(arena::scratch());
-  auto indices  = array::init<U32>(arena::scratch());
+  auto vertices = S_DARRAY_EMPTY(vulkan::VertexTex);
+  auto indices  = S_DARRAY_EMPTY(U32);
 
   for (U32 shapes_i = 0; shapes_i < shapes.size(); ++shapes_i) {
     for (U32 indices_i = 0; indices_i < shapes[shapes_i].mesh.indices.size(); ++indices_i) {
@@ -83,40 +93,53 @@ MeshHandle meshes::create(const char* fpath) {
 
   Mesh mesh{
       .vertex_buffer = vulkan::vertex_buffers::create(vertices),
+      .vertex_count  = vertices._size,
       .index_buffer  = vulkan::index_buffers::create(indices),
+      .index_count   = indices._size,
   };
 
-  MeshHandle handle{.value = next_handle_value++};
-  hashmap::insert(_meshes, handle.value, mesh);
-
-  return handle;
+  return resource_registry::insert<MeshHandle>(_meshes, arena, mesh);
 }
 
-MeshHandle
-meshes::create(vulkan::VertexBufferHandle vertex_buffer, vulkan::IndexBufferHandle index_buffer) {
+MeshHandle meshes::create(ArenaHandle                arena,
+                          vulkan::VertexBufferHandle vertex_buffer,
+                          vulkan::IndexBufferHandle  index_buffer,
+                          U32                        vertex_count,
+                          U32                        index_count) {
   Mesh mesh{
       .vertex_buffer = vertex_buffer,
+      .vertex_count  = vertex_count,
       .index_buffer  = index_buffer,
+      .index_count   = index_count,
   };
 
-  MeshHandle handle{.value = next_handle_value++};
-  hashmap::insert(_meshes, handle.value, mesh);
+  return resource_registry::insert<MeshHandle>(_meshes, arena, mesh);
+}
 
-  return handle;
+void meshes::set_constants(MeshHandle handle, glm::mat4 model, I32 texture_index) {
+  auto mesh = resource_registry::value(_meshes, handle);
+
+  mesh->gpu_constants = {model, texture_index};
 }
 
 void meshes::cleanup(MeshHandle handle) {
-  auto mesh = hashmap::value(_meshes, handle.value);
+  auto mesh = resource_registry::value(_meshes, handle);
 
   vulkan::vertex_buffers::cleanup(mesh->vertex_buffer);
-  vulkan::index_buffers::cleanup(mesh->index_buffer);
+  if (!handles::invalid(mesh->index_buffer)) {
+    vulkan::index_buffers::cleanup(mesh->index_buffer);
+  }
+
+  resource_registry::remove(_meshes, handle);
 }
 
-void meshes::draw(vulkan::CommandBufferHandle command_buffer, MeshHandle handle) {
-  auto mesh = hashmap::value(_meshes, handle.value);
+void meshes::draw(vulkan::PipelineHandle      pipeline,
+                  vulkan::CommandBufferHandle command_buffer,
+                  MeshHandle                  handle) {
+  auto mesh = resource_registry::value(_meshes, handle);
 
   VkBuffer vertex_buffers[] = {
-      *vulkan::buffers::buffer(mesh->vertex_buffer),
+      *vulkan::buffers::vk_buffer(mesh->vertex_buffer),
   };
 
   auto vk_command_buffer = *vulkan::command_buffers::buffer(command_buffer);
@@ -124,21 +147,23 @@ void meshes::draw(vulkan::CommandBufferHandle command_buffer, MeshHandle handle)
   VkDeviceSize offsets[] = {0};
   vkCmdBindVertexBuffers(vk_command_buffer, 0, 1, vertex_buffers, offsets);
 
-  if (!handle::invalid(mesh->index_buffer)) {
-    auto index_buffer = *vulkan::buffers::buffer(mesh->index_buffer);
+  if (!handles::invalid(mesh->index_buffer)) {
+    auto index_buffer = *vulkan::buffers::vk_buffer(mesh->index_buffer);
     vkCmdBindIndexBuffer(vk_command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdDrawIndexed(vk_command_buffer,
-                     vulkan::index_buffers::size(mesh->index_buffer),
-                     1,
-                     0,
-                     0,
-                     0);
+    vkCmdPushConstants(vk_command_buffer,
+                       *vulkan::pipelines::layout(pipeline),
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0,
+                       sizeof(MeshGPUConstants),
+                       &mesh->gpu_constants);
+
+    vkCmdDrawIndexed(vk_command_buffer, mesh->index_count, 1, 0, 0, 0);
   } else {
-    vkCmdDraw(vk_command_buffer,
-              vulkan::vertex_buffers::vertex_count(mesh->vertex_buffer),
-              1,
-              0,
-              0);
+    vkCmdDraw(vk_command_buffer, mesh->vertex_count, 1, 0, 0);
   }
+}
+
+void meshes::reset_arena(ArenaHandle arena) {
+  resource_registry::reset_arena_storage<MeshHandle>(_meshes, arena.value);
 }

@@ -93,9 +93,9 @@ namespace {
   void create_framebuffers(vulkan::RenderPassHandle render_pass) {
     for (U32 i = 0; i < vulkan::_swap_chain.image_handles._size; i++) {
       VkImageView attachments[] = {
-          *vulkan::images::view(vulkan::_swap_chain.multisampling),
-          *vulkan::images::view(vulkan::_swap_chain.depth),
-          *vulkan::images::view(vulkan::_swap_chain.image_handles._data[i])};
+          *vulkan::images::vk_view(vulkan::_swap_chain.multisampling),
+          *vulkan::images::vk_view(vulkan::_swap_chain.depth),
+          *vulkan::images::vk_view(vulkan::_swap_chain.image_handles._data[i])};
 
       VkFramebufferCreateInfo create_info{};
       create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -167,8 +167,8 @@ void vulkan::swap_chain::create(vulkan::RenderPassHandle render_pass, SDL_Window
   _swap_chain = {
       .depth         = depth,
       .multisampling = multisampling,
-      .frame_buffers = array::init<VkFramebuffer>(_mem_render, image_count, image_count),
-      .image_handles = array::init<ImageHandle>(_mem_render, image_count, image_count),
+      .frame_buffers = A_DARRAY_SIZE(VkFramebuffer, _mem_render, image_count),
+      .image_handles = A_DARRAY_SIZE(ImageHandle, _mem_render, image_count),
       .window        = window,
       .render_pass   = render_pass,
   };
@@ -241,8 +241,8 @@ vulkan::SwapChainSupport
 vulkan::swap_chain::swap_chain_support(VkPhysicalDevice device, VkSurfaceKHR surface) {
   SwapChainSupport details{
       .capabilities  = VkSurfaceCapabilitiesKHR{},
-      .formats       = array::init<VkSurfaceFormatKHR>(arena::scratch()),
-      .present_modes = array::init<VkPresentModeKHR>(arena::scratch()),
+      .formats       = S_DARRAY_EMPTY(VkSurfaceFormatKHR),
+      .present_modes = S_DARRAY_EMPTY(VkPresentModeKHR),
   };
 
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);

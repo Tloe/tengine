@@ -39,6 +39,7 @@ namespace {
     VkFence                     in_flight_fence;
     vulkan::CommandBufferHandle command_buffer;
     ArenaHandle                 arena;
+    vulkan::PipelineHandle      current_pipeline;
   } frames[MAX_FRAMES_IN_FLIGHT];
 
   void init_frames() {
@@ -87,8 +88,6 @@ namespace {
 }
 
 void render::init(Settings settings, SDL_Window* sdl_window) {
-  SET_SCRATCH(settings.memory_init_scratch);
-
   vulkan::context::init(sdl_window, debug);
 
   vulkan::command_buffers::init();
@@ -97,13 +96,9 @@ void render::init(Settings settings, SDL_Window* sdl_window) {
 
   vulkan::swap_chain::create(render_pass, sdl_window);
 
-  vulkan::ubos::init(settings.max_textures);
+  vulkan::ubos::init(settings.ubo_settings);
 
-  for (U32 i = 0; i < settings.pipeline_settings_count; ++i) {
-    vulkan::pipelines::create(render_pass, settings.pipeline_settings[i]);
-  }
-
-  ui::init(sdl_window, render_pass);
+  ui::init(sdl_window, render_pass, settings.ui_fonts);
 
   init_frames();
 
@@ -115,6 +110,8 @@ void render::cleanup() {
 
   cleanup_frames();
 
+  ui::cleanup();
+
   vulkan::ubos::cleanup();
 
   vulkan::pipelines::cleanup();
@@ -125,39 +122,43 @@ void render::cleanup() {
   vulkan::context::cleanup(debug);
 }
 
+vulkan::PipelineHandle render::create_pipeline(vulkan::pipelines::Settings settings) {
+  return vulkan::pipelines::create(render_pass, settings);
+}
+
 void render::bind_pipeline(vulkan::PipelineHandle pipeline) {
   auto frame = &frames[current_frame];
 
   vulkan::pipelines::bind(pipeline, frame->command_buffer);
-  vulkan::ubos::bind_global_ubo(frame->command_buffer, pipeline);
-  vulkan::ubos::bind_model_ubo(frame->command_buffer, pipeline);
-  vulkan::ubos::bind_textures(frame->command_buffer, pipeline);
+
+  frame->current_pipeline = pipeline;
 }
 
-void render::set_view_projection(glm::mat4& view, glm::mat4& proj) {
-  vulkan::ubos::set_global_ubo(vulkan::ubos::GlobalUBO{
+void
+render::set_view_projection(vulkan::UBOHandle ubo, const glm::mat4& view, const glm::mat4& proj) {
+  auto global_ubo = vulkan::GlobalUBO{
       .view = view,
       .proj = proj,
-  });
+  };
+
+  vulkan::ubos::set_ubo(ubo, reinterpret_cast<void*>(&global_ubo));
 }
 
-void render::set_model(glm::mat4& model) {
-  vulkan::ubos::set_model_ubo(vulkan::ubos::ModelUBO{
-      .model         = model,
-      .texture_index = 0,
-  });
+void render::draw(MeshHandle mesh) {
+  meshes::draw(frames[current_frame].current_pipeline, frames[current_frame].command_buffer, mesh);
 }
 
-void render::draw_mesh(MeshHandle mesh) {
-  meshes::draw(frames[current_frame].command_buffer, mesh);
+vulkan::CommandBufferHandle render::current_command_buffer() {
+  return frames[current_frame].command_buffer;
 }
+
 
 void render::begin_frame() {
   auto frame = &frames[current_frame];
 
   vkWaitForFences(vulkan::_ctx.logical_device, 1, &frame->in_flight_fence, VK_TRUE, UINT64_MAX);
 
-  arena::reset(frame->arena);
+  // arena::reset(frame->arena);
 
   auto result = vkAcquireNextImageKHR(vulkan::_ctx.logical_device,
                                       vulkan::_swap_chain.swap_chain,
@@ -204,7 +205,7 @@ void render::begin_frame() {
 void render::end_frame() {
   auto frame = &frames[current_frame];
 
-  ui::draw_frame(frame->command_buffer);
+  ui::draw_frame();
 
   vulkan::render_pass::end(frame->command_buffer);
 
@@ -255,6 +256,9 @@ void render::end_frame() {
   vkDeviceWaitIdle(vulkan::_ctx.logical_device);
 
   ui::cleanup_frame();
+
+  meshes::reset_arena(arena::frame());
 }
 
 void render::resize_framebuffers() { framebuffer_resized = true; }
+

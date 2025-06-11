@@ -1,7 +1,7 @@
 #pragma once
 
-#include "handles.h"
 #include "types.h"
+#include "vulkan/handles.h"
 
 #include <vulkan/vulkan_core.h>
 
@@ -22,18 +22,19 @@ namespace vulkan::images {
 
   ImageHandle add(VkImage vk_image, VkFormat format, U32 mip_levels);
 
-  void cleanup(ImageHandle handle);
+  void cleanup(ImageHandle image);
 
-  void create_view(ImageHandle handle, VkImageAspectFlags aspect_flags);
-  void cleanup_view(ImageHandle handle);
+  void create_view(ImageHandle image, VkImageAspectFlags aspect_flags);
+  void cleanup_view(ImageHandle image);
 
-  void transition_layout(ImageHandle handle, VkImageLayout old_layout, VkImageLayout new_layout);
+  void transition_layout_safe(ImageHandle image, VkImageLayout old_layout, VkImageLayout new_layout);
+  void transition_layout(ImageHandle image, VkImageLayout old_layout, VkImageLayout new_layout);
 
-  void generate_mipmaps(ImageHandle handle);
+  void generate_mipmaps(ImageHandle image);
 
-  VkImage*     image(ImageHandle handle);
-  VkImageView* view(ImageHandle handle);
-  VkFormat*    format(ImageHandle handle);
-  U32*         mip_levels(ImageHandle handle);
-  Size         size(ImageHandle handle);
+  VkImage*     vk_image(ImageHandle image);
+  VkImageView* vk_view(ImageHandle image);
+  VkFormat*    vk_format(ImageHandle image);
+  U32          mip_levels(ImageHandle image);
+  Size         size(ImageHandle image);
 }

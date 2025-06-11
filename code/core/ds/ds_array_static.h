@@ -9,17 +9,23 @@
 
 template <typename T, U32 SIZE>
 struct StaticArray {
-  const U32 size = SIZE;
-  T*        data = nullptr;
+  U32 size = SIZE;
+  T*  data = nullptr;
 };
 
 namespace array {
   template <typename T, U32 SIZE>
-  StaticArray<T, SIZE> init(ArenaHandle arena_handle) {
-    return StaticArray<T, SIZE>{
+  StaticArray<T, SIZE> init(ArenaHandle arena_handle, T init_value = T{}) {
+    auto sa = StaticArray<T, SIZE>{
         .size = SIZE,
         .data = arena::alloc<T>(arena_handle, sizeof(T) * SIZE),
     };
+
+    for (U32 i = 0; i < SIZE; ++i) {
+      sa.data[i] = init_value;
+    }
+
+    return sa;
   }
 
   template <typename T, U32 SIZE>

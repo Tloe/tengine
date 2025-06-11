@@ -1,34 +1,43 @@
 #pragma once
 
+#include "ds_array_dynamic.h"
+#include "ds_string.h"
 #include "handles.h"
 #include "vulkan/handles.h"
 #include "vulkan/pipelines.h"
+#include "vulkan/ubos.h"
 
 #include <SDL3/SDL_video.h>
 #include <vulkan/glm_includes.h>
 #include <vulkan/vulkan_core.h>
 
 namespace render {
+  struct MemorySettings {
+    const char* name;
+    U32         byte_size;
+  };
+
   struct Settings {
-    U32                          memory_init_scratch;
-    U8                           max_frames;
-    U16                          max_textures;
-    U16                          width;
-    U16                          height;
-    U32                          ubo_count;
-    vulkan::pipelines::Settings* pipeline_settings       = nullptr;
-    U32                          pipeline_settings_count = 0;
+    U8                     max_frames;
+    U16                    max_textures;
+    U16                    width;
+    U16                    height;
+    DynamicArray<String>   ui_fonts;
+    vulkan::ubos::Settings ubo_settings;
   };
 
   void init(Settings settings, SDL_Window* sdl_window);
   void cleanup();
 
-  void bind_pipeline(vulkan::PipelineHandle pipeline);
+  vulkan::PipelineHandle create_pipeline(vulkan::pipelines::Settings settings);
+  void                   bind_pipeline(vulkan::PipelineHandle pipeline);
 
-  void set_view_projection(glm::mat4& view, glm::mat4& proj);
-  void set_model(glm::mat4& model);
+  void set_view_projection(vulkan::UBOHandle ubo, const glm::mat4& view, const glm::mat4& proj);
+  void set_model(vulkan::UBOHandle ubo, const glm::mat4& model, I32 texture_index = -1);
 
-  void draw_mesh(MeshHandle mesh);
+  void draw(MeshHandle mesh);
+
+  vulkan::CommandBufferHandle current_command_buffer();
 
   void begin_frame();
   void end_frame();

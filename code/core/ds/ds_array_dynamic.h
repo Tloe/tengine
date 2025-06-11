@@ -24,6 +24,8 @@ namespace array {
   template <typename T>
   DynamicArray<T> init(ArenaHandle a, std::initializer_list<T> ilist);
   template <typename T>
+  DynamicArray<T> init(ArenaHandle a, const DynamicArray<T>& other);
+  template <typename T>
   void reserve(DynamicArray<T>& da, U32 new_capacity);
   template <typename T>
   void resize(DynamicArray<T>& da, U32 size);
@@ -40,6 +42,20 @@ namespace array {
   template <typename T>
   bool contains(DynamicArray<T>& da, T& t);
 }
+
+#define S_DARRAY(T, ...)       array::init<T>(arena::scratch(), std::initializer_list<T>{__VA_ARGS__})
+#define S_DARRAY_EMPTY(T)      array::init<T>(arena::scratch())
+#define S_DARRAY_CAP(T, CAP)   array::init<T>(arena::scratch(), CAP)
+#define S_DARRAY_SIZE(T, SIZE) array::init<T>(arena::scratch(), SIZE, SIZE)
+
+#define F_DARRAY(T, ...)       array::init<T>(arena::frame(), std::initializer_list<T>{__VA_ARGS__})
+#define F_DARRAY_EMPTY(T)      array::init<T>(arena::frame())
+#define F_DARRAY_CAP(T, CAP)   array::init<T>(arena::frame(), CAP)
+#define F_DARRAY_SIZE(T, SIZE) array::init<T>(arena::frame(), SIZE, SIZE)
+
+#define A_DARRAY(T, ARENA, ...)       array::init<T>(ARENA, std::initializer_list<T>{__VA_ARGS__})
+#define A_DARRAY_CAP(T, ARENA, CAP)   array::init<T>(ARENA, CAP)
+#define A_DARRAY_SIZE(T, ARENA, SIZE) array::init<T>(ARENA, SIZE, SIZE)
 
 namespace array {
   template <typename T>
@@ -66,6 +82,7 @@ namespace array {
     };
 
     memcpy(da._data, beg, sizeof(T) * size);
+
     return da;
   }
 
@@ -81,6 +98,21 @@ namespace array {
     };
 
     memcpy(da._data, ilist.begin(), sizeof(T) * size);
+
+    return da;
+  }
+
+  template <typename T>
+  DynamicArray<T> init(ArenaHandle a, const DynamicArray<T>& other) {
+    DynamicArray<T> da{
+        ._size         = other._size,
+        ._capacity     = other._size,
+        ._data         = arena::alloc<T>(a, sizeof(T) * other._size),
+        ._arena_handle = a,
+    };
+
+    memcpy(da._data, other._data, sizeof(T) * other._size);
+
     return da;
   }
 

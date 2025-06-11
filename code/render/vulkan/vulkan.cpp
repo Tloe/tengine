@@ -15,7 +15,9 @@ DynamicArray<const char*> vulkan::required_instance_extension(bool debug) {
                                              sdl_extensions,
                                              sdl_extensions + sdl_extension_count);
 
-  array::push_back(extensions, static_cast<const char*>(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME));
+  array::push_back(
+      extensions,
+      static_cast<const char*>(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME));
 
   if (debug) {
     array::push_back(extensions, static_cast<const char*>(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
@@ -34,12 +36,10 @@ DynamicArray<String> vulkan::available_extensions(VkPhysicalDevice device) {
                                        &available_extension_count,
                                        available_extensions);
 
-  auto scratch = arena::scratch();
-
-  auto result = array::init<String>(scratch, available_extension_count);
+  auto result = S_DARRAY_CAP(String, available_extension_count);
 
   for (U32 i = 0; i < available_extension_count; i++) {
-    array::push_back(result, string::init(scratch, available_extensions[i].extensionName));
+    array::push_back(result, S_STRING(available_extensions[i].extensionName));
   }
 
   return result;
@@ -58,7 +58,7 @@ bool vulkan::queue_family_indices(VkPhysicalDevice device,
   bool graphics_family_found, present_family_found = false;
   for (U32 i = 0; i < queue_family_count; i++) {
     if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-      *graphics_family       = i;
+      *graphics_family      = i;
       graphics_family_found = true;
     }
 
@@ -66,7 +66,7 @@ bool vulkan::queue_family_indices(VkPhysicalDevice device,
     vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_support);
 
     if (present_support) {
-      *present_family       = i;
+      *present_family      = i;
       present_family_found = true;
     }
 
@@ -77,4 +77,3 @@ bool vulkan::queue_family_indices(VkPhysicalDevice device,
 
   return false;
 }
-

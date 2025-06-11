@@ -47,6 +47,7 @@ namespace vulkan {
   inline bool operator==(const Vertex2DColorTex& lhs, const Vertex2DColorTex& rhs) {
     return lhs.pos == rhs.pos && lhs.color == rhs.color && lhs.uv == rhs.uv;
   }
+
   constexpr VkVertexInputAttributeDescription VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC[3] = {
       {
           .location = 0,

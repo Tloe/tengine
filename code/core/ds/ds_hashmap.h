@@ -25,7 +25,6 @@ struct THashMap {
     V v;
   };
 
-  K           _empty_value = empty_value;
   KeyValue*   _data;
   ArenaHandle _arena_handle;
   HasherFn    _hasher_fn;
@@ -75,7 +74,7 @@ namespace hashmap {
        U64                                            capacity  = 8,
        typename THashMap<K, empty_value, V>::HasherFn hasher_fn = hasher<const K>);
 
-  template <typename V, typename K>
+  template <typename V>
   HashMap8<V> init8(ArenaHandle                    arena_handle,
                     U64                            capacity  = 8,
                     typename HashMap8<V>::HasherFn hasher_fn = hasher<const U8&>);
@@ -101,11 +100,11 @@ namespace hashmap {
              U64                                 capacity  = 8,
              typename HashMapString<V>::HasherFn hasher_fn = hasher<const String&>);
 
-  template <typename K, K empty_value, typename V>
-  bool initialized(THashMap<K, empty_value, V>& hm);
+  // template <typename K, K empty_value, typename V>
+  // bool initialized(THashMap<K, empty_value, V>& hm);
 
   template <typename K, K empty_value, typename V>
-  void grow(THashMap<K, empty_value, V>& hm);
+  void _grow(THashMap<K, empty_value, V>& hm);
 
   template <typename K, K empty_value, typename V>
   void clear(THashMap<K, empty_value, V>& hm);
@@ -140,7 +139,7 @@ namespace {
   template <typename K, K empty_value, typename V>
   void _remove(THashMap<K, empty_value, V>& hm, U64 index) {
     for (;;) {
-      hm._data[index].k = empty_value;
+      hm._data[index] = typename THashMap<K, empty_value, V>::KeyValue{.k = empty_value, .v = V{}};
 
       U64 next = (index + 1) & (hm._capacity - 1);
 
@@ -218,7 +217,7 @@ namespace hashmap {
     return hm;
   }
 
-  template <typename V, typename K>
+  template <typename V>
   HashMap8<V>
   init8(ArenaHandle arena_handle, U64 capacity, typename HashMap8<V>::HasherFn hasher_fn) {
     return init<U8, U8_MAX, V>(arena_handle, capacity, hasher_fn);
@@ -249,13 +248,13 @@ namespace hashmap {
     return init<String, String{}, V>(arena_handle, capacity, hasher_fn);
   }
 
-  template <typename K, K empty_value, typename V>
-  inline bool initialized(THashMap<K, empty_value, V>& hm) {
-    return (hm._capacity != 0);
-  }
+  // template <typename K, K empty_value, typename V>
+  // inline bool initialized(THashMap<K, empty_value, V>& hm) {
+  //   return (hm._capacity != 0);
+  // }
 
   template <typename K, K empty_value, typename V>
-  void grow(THashMap<K, empty_value, V>& hm) {
+  void _grow(THashMap<K, empty_value, V>& hm) {
     U64  old_capacity = hm._capacity;
     auto old_data     = hm._data;
     hm._size          = 0;
@@ -290,7 +289,7 @@ namespace hashmap {
     assert(hm._capacity != 0 && "init not called");
 
     if (hm._size >= hm._capacity) {
-      grow(hm);
+      _grow(hm);
     }
 
     K k = static_cast<K>(kvar);
@@ -308,7 +307,7 @@ namespace hashmap {
         hm._data[index].k = k;
         hm._data[index].v = v;
 
-        if(inserted == nullptr) {
+        if (inserted == nullptr) {
           inserted = &hm._data[index].v;
         }
 
@@ -322,7 +321,7 @@ namespace hashmap {
         std::swap(k, hm._data[index].k);
         std::swap(v, hm._data[index].v);
 
-        if(inserted == nullptr) {
+        if (inserted == nullptr) {
           inserted = &hm._data[index].v;
         }
 
@@ -375,7 +374,7 @@ namespace hashmap {
   void for_each(THashMap<K, empty_value, V>& hm,
                 void (*fn)(typename THashMap<K, empty_value, V>::KeyValue)) {
     for (U32 i = 0; i < hm._capacity; ++i) {
-      if (hm._data[i].k != hm._empty_value) {
+      if (hm._data[i].k != empty_value) {
         fn(hm._data[i]);
       }
     }

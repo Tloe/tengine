@@ -13,7 +13,10 @@ namespace vulkan {
   typedef BufferHandle                    IndexBufferHandle;
   typedef BufferHandle                    UBOBufferHandle;
 
-  struct ImageTag {};
+  struct UBOTag;
+  typedef Handle<UBOTag, U16, U16_MAX> UBOHandle;
+
+  struct ImageTag;
   typedef Handle<ImageTag, U16, U16_MAX> ImageHandle;
 
   typedef ImageHandle TextureHandle;

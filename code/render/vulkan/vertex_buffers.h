@@ -21,7 +21,5 @@ namespace vulkan {
     // }
 
     void cleanup(VertexBufferHandle handle);
-
-    U32 vertex_count(VertexBufferHandle handle);
   }
 }

@@ -1,16 +1,20 @@
 #pragma once
 
 #include "clay//clay.h"
+#include "ds_array_dynamic.h"
+#include "ds_string.h"
 #include "vulkan/handles.h"
 
-#include <SDL3/SDL_video.h>
+struct SDL_Window;
 
 namespace ui {
   typedef Clay_RenderCommandArray(*UiBuilderFn)();
 
-  void init(SDL_Window* window, vulkan::RenderPassHandle);
+  void init(SDL_Window* window, vulkan::RenderPassHandle, DynamicArray<String>& fonts);
 
-  void draw_frame(vulkan::CommandBufferHandle command_buffer);
+  void cleanup();
+
+  void draw_frame();
   void cleanup_frame();
 
   void set_builder(UiBuilderFn ui_builder_fn);

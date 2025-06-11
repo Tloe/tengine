@@ -8,7 +8,5 @@ namespace vulkan {
     IndexBufferHandle create(const DynamicArray<U32>& indices);
     IndexBufferHandle create(const U32* indices, U32 size);
     void              cleanup(IndexBufferHandle handle);
-
-    U32 size(IndexBufferHandle handle);
   }
 }
