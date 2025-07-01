@@ -5,25 +5,26 @@
 #include "ds_hashmap.h"
 #include "handle.h"
 #include "vulkan/command_buffers.h"
+#include "vulkan/common.h"
 #include "vulkan/device.h"
 #include "vulkan/images.h"
-#include "vulkan/vulkan.h"
+#include "vulkan_include.h"
 
 #include <cstdio>
-#include <vulkan/vulkan_core.h>
 
 namespace {
-  auto mem_render_resources = arena::by_name("render_resources");
+  auto mem_render = arena::by_name("render");
 
   struct BufferData {
     U32            byte_size;
     VkBuffer       vk_buffer;
     VkDeviceMemory vk_memory;
+    void*          mapped = nullptr;
   };
 
-  HashMap16<BufferData> index_buffers = hashmap::init16<BufferData>(mem_render_resources);
+  HashMap16<BufferData> _buffers = hashmap::init16<BufferData>(mem_render);
 
-  handles::Allocator<vulkan::BufferHandle, U16, 100> _handles;
+  handles::Allocator<vulkan::BufferHandle, U16, 200> _handles;
 }
 
 vulkan::BufferHandle vulkan::buffers::create(VkDeviceSize          byte_size,
@@ -31,7 +32,7 @@ vulkan::BufferHandle vulkan::buffers::create(VkDeviceSize          byte_size,
                                              VkMemoryPropertyFlags properties) {
   auto buffer = handles::next(_handles);
 
-  auto buffer_data       = hashmap::insert(index_buffers, buffer.value);
+  auto buffer_data       = hashmap::insert(_buffers, buffer.value);
   buffer_data->byte_size = byte_size;
 
   VkBufferCreateInfo buffer_info{};
@@ -40,11 +41,14 @@ vulkan::BufferHandle vulkan::buffers::create(VkDeviceSize          byte_size,
   buffer_info.usage       = usage;
   buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  ASSERT_SUCCESS("failed to create buffer!",
-                 vkCreateBuffer(vulkan::_ctx.logical_device, &buffer_info, nullptr, &buffer_data->vk_buffer));
+  ASSERT_SUCCESS(
+      "failed to create buffer!",
+      vkCreateBuffer(vulkan::_ctx.logical_device, &buffer_info, nullptr, &buffer_data->vk_buffer));
 
   VkMemoryRequirements mem_requirements;
-  vkGetBufferMemoryRequirements(vulkan::_ctx.logical_device, buffer_data->vk_buffer, &mem_requirements);
+  vkGetBufferMemoryRequirements(vulkan::_ctx.logical_device,
+                                buffer_data->vk_buffer,
+                                &mem_requirements);
 
   VkMemoryAllocateInfo alloc_info{};
   alloc_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -57,15 +61,22 @@ vulkan::BufferHandle vulkan::buffers::create(VkDeviceSize          byte_size,
       "failed to allocate buffer memory!",
       vkAllocateMemory(vulkan::_ctx.logical_device, &alloc_info, nullptr, &buffer_data->vk_memory));
 
-  vkBindBufferMemory(vulkan::_ctx.logical_device, buffer_data->vk_buffer, buffer_data->vk_memory, 0);
+  vkBindBufferMemory(vulkan::_ctx.logical_device,
+                     buffer_data->vk_buffer,
+                     buffer_data->vk_memory,
+                     0);
 
   return buffer;
 }
 
 void vulkan::buffers::cleanup(BufferHandle buffer) {
+  auto buffer_data = hashmap::value(_buffers, buffer.value);
+
+  if (buffer_data->mapped) unmap(buffer);
+
   vkDestroyBuffer(vulkan::_ctx.logical_device, *vk_buffer(buffer), nullptr);
   vkFreeMemory(vulkan::_ctx.logical_device, *vk_memory(buffer), nullptr);
-  hashmap::erase(index_buffers, buffer.value);
+  hashmap::erase(_buffers, buffer.value);
 
   handles::free(_handles, buffer);
 }
@@ -90,12 +101,13 @@ void vulkan::buffers::copy(BufferHandle dst, BufferHandle src, VkDeviceSize size
                   1,
                   &copy_region);
 
-  command_buffers::submit_and_cleanup(command_buffer);
+  command_buffers::submit(command_buffer);
+  command_buffers::wait(command_buffer);
 }
 
 void vulkan::buffers::copy(ImageHandle dst, BufferHandle src, U32 w, U32 h) {
-  auto cmds = command_buffers::create();
-  command_buffers::begin(cmds);
+  auto command_buffer = command_buffers::create();
+  command_buffers::begin(command_buffer);
 
   VkBufferImageCopy region{};
   region.bufferOffset                    = 0;
@@ -108,24 +120,46 @@ void vulkan::buffers::copy(ImageHandle dst, BufferHandle src, U32 w, U32 h) {
   region.imageOffset                     = {0, 0, 0};
   region.imageExtent                     = {w, h, 1};
 
-  vkCmdCopyBufferToImage(*command_buffers::buffer(cmds),
+  vkCmdCopyBufferToImage(*command_buffers::buffer(command_buffer),
                          *vk_buffer(src),
                          *images::vk_image(dst),
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                          1,
                          &region);
 
-  command_buffers::submit_and_cleanup(cmds);
+  command_buffers::submit(command_buffer);
+  command_buffers::wait(command_buffer);
+}
+
+void* vulkan::buffers::map(BufferHandle buffer) {
+  auto buffer_data = hashmap::value(_buffers, buffer.value);
+
+  vkMapMemory(vulkan::_ctx.logical_device,
+              buffer_data->vk_memory,
+              0,
+              buffer_data->byte_size,
+              0,
+              &buffer_data->mapped);
+
+  return buffer_data->mapped;
+}
+void vulkan::buffers::unmap(BufferHandle buffer) {
+  auto buffer_data = hashmap::value(_buffers, buffer.value);
+
+  if (buffer_data->mapped) {
+    vkUnmapMemory(vulkan::_ctx.logical_device, buffer_data->vk_memory);
+    buffer_data->mapped = nullptr;
+  }
 }
 
 VkBuffer* vulkan::buffers::vk_buffer(BufferHandle buffer) {
-  return &hashmap::value(index_buffers, buffer.value)->vk_buffer;
+  return &hashmap::value(_buffers, buffer.value)->vk_buffer;
 }
 
 VkDeviceMemory* vulkan::buffers::vk_memory(BufferHandle buffer) {
-  return &hashmap::value(index_buffers, buffer.value)->vk_memory;
+  return &hashmap::value(_buffers, buffer.value)->vk_memory;
 }
 
 U32 vulkan::buffers::byte_size(BufferHandle buffer) {
-  return hashmap::value(index_buffers, buffer.value)->byte_size;
+  return hashmap::value(_buffers, buffer.value)->byte_size;
 }

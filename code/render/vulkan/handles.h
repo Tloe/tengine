@@ -12,6 +12,7 @@ namespace vulkan {
   typedef BufferHandle                    VertexBufferHandle;
   typedef BufferHandle                    IndexBufferHandle;
   typedef BufferHandle                    UBOBufferHandle;
+  typedef BufferHandle                    SSBOBufferHandle;
 
   struct UBOTag;
   typedef Handle<UBOTag, U16, U16_MAX> UBOHandle;

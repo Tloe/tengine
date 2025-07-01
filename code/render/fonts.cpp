@@ -5,17 +5,17 @@
 #include "handle.h"
 #include "handles.h"
 #include "textures.h"
+#include "vulkan/vulkan_include.h"
 
 #include <fstream>
-#include <vulkan/vulkan_core.h>
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb/stb_truetype.h>
 
 namespace {
-  ArenaHandle mem_render_resource = arena::by_name("render_resources");
+  ArenaHandle mem_render = arena::by_name("render");
 
-  auto _fonts      = array::init<render::Font, 10>(mem_render_resource);
+  auto _fonts      = array::init<render::Font, 10>(mem_render);
   U16  next_handle = 0;
 }
 
@@ -27,7 +27,7 @@ FontHandle render::fonts::load(const char* fpath) {
   file_stream.seekg(0, std::ios::beg);
 
   U8* ttf_buffer;
-  ttf_buffer = arena::alloc(mem_render_resource, file_size);
+  ttf_buffer = arena::alloc(mem_render, file_size);
   file_stream.read(reinterpret_cast<char*>(ttf_buffer), file_size);
 
   U32 font_count = stbtt_GetNumberOfFonts(ttf_buffer);
@@ -49,7 +49,8 @@ FontHandle render::fonts::load(const char* fpath) {
   font->first_codepoint = 32;
   font->codepoint_count = 96;
   font->rgba_bitmap =
-      arena::alloc(mem_render_resource, sizeof(U32) * font->bitmap_width * font->bitmap_height);
+      arena::alloc(mem_render, sizeof(U32) * font->bitmap_width * font->bitmap_height);
+  memset(font->rgba_bitmap, 0, 4 * font->bitmap_width * font->bitmap_height);
 
   stbtt_pack_context ctx;
 
@@ -59,7 +60,7 @@ FontHandle render::fonts::load(const char* fpath) {
   stbtt_PackBegin(&ctx, bitmap, font->bitmap_width, font->bitmap_height, 0, 1, nullptr);
 
   font->packed_chars = reinterpret_cast<stbtt_packedchar*>(
-      arena::alloc(mem_render_resource, sizeof(stbtt_packedchar) * font->codepoint_count));
+      arena::alloc(mem_render, sizeof(stbtt_packedchar) * font->codepoint_count));
 
   stbtt_PackFontRange(&ctx,
                       ttf_buffer,
@@ -92,10 +93,10 @@ FontHandle render::fonts::load(const char* fpath) {
 }
 
 void render::fonts::cleanup(FontHandle handle) {
- auto font = _fonts.data[handle.value];
+  auto font = _fonts.data[handle.value];
 
- textures::cleanup(font.texture);
- textures::cleanup(font.sampler);
+  textures::cleanup(font.texture);
+  textures::cleanup(font.sampler);
 }
 
 render::Font render::fonts::font(FontHandle handle) { return _fonts.data[handle.value]; }

@@ -3,7 +3,8 @@ add_library(core)
 set(HEADERS
     io.h
     handle.h
-    types.h)
+    types.h
+    lifetime.h)
 
 set(SOURCES
     io.cpp)

@@ -1,25 +1,26 @@
 #include "context.h"
 
 #include "arena.h"
+#include "common.h"
 #include "debug.h"
 #include "ds_array_dynamic.h"
 #include "ds_array_static.h"
 #include "ds_string.h"
 #include "handles.h"
 #include "swap_chain.h"
-#include "vulkan.h"
+#include "vulkan_include.h"
 
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <vulkan/vulkan_core.h>
+#include <iostream>
+#include <vector>
 
 namespace vulkan { Context _ctx = {}; }
 
 namespace {
   ArenaHandle mem_render           = arena::by_name("render");
-  ArenaHandle mem_render_resources = arena::by_name("render_resources");
 
   bool check_device_extension_support(VkPhysicalDevice device) {
     auto available = vulkan::available_extensions(device);
@@ -142,6 +143,8 @@ namespace {
                                   nullptr,
                                   &vulkan::_ctx.logical_device));
 
+    volkLoadDevice(vulkan::_ctx.logical_device);
+
     vkGetDeviceQueue(vulkan::_ctx.logical_device,
                      graphics_family_index,
                      0,
@@ -182,6 +185,7 @@ namespace {
 }
 
 void vulkan::context::init(SDL_Window* window, bool debug) {
+  volkInitialize();
   VkApplicationInfo app_info{};
   app_info.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.pApplicationName   = "tengine";
@@ -190,37 +194,59 @@ void vulkan::context::init(SDL_Window* window, bool debug) {
   app_info.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
   app_info.apiVersion         = VK_API_VERSION_1_2;
 
+  // Instance create info
   VkInstanceCreateInfo instance_create_info{};
-  instance_create_info.sType               = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  instance_create_info.pApplicationInfo    = &app_info;
-  const char* layers[]                     = {"VK_LAYER_RENDERDOC_Capture"};
-  instance_create_info.enabledLayerCount     = 1;
-  instance_create_info.ppEnabledLayerNames = layers;
+  instance_create_info.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+  instance_create_info.pApplicationInfo = &app_info;
 
-  auto instance_extensions = vulkan::required_instance_extension(debug);
-
-  printf("required extensions:\n");
-  for (int i = 0; i < instance_extensions._size; i++) {
-    printf("\t%s\n", instance_extensions._data[i]);
-  }
-
+  // Extensions
+  auto instance_extensions                     = required_instance_extension(debug);
   instance_create_info.enabledExtensionCount   = instance_extensions._size;
   instance_create_info.ppEnabledExtensionNames = instance_extensions._data;
 
+  // Layers: only if debug and if available
+  VkDebugUtilsMessengerCreateInfoEXT debug_ci{};
   if (debug) {
-    printf("DEBUG\n");
-    instance_create_info.enabledLayerCount   = array::size(validation_layers);
-    instance_create_info.ppEnabledLayerNames = validation_layers;
+    // 1. Query how many layers there are
+    uint32_t layerCount = 0;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
-    auto debug_create_info     = debug::debug_messenger_create_info();
-    instance_create_info.pNext = &debug_create_info;
+    // 2. Allocate a vector and fetch their properties
+    std::vector<VkLayerProperties> layers(layerCount);
+    vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
+
+    // 3. Check for “VK_LAYER_KHRONOS_validation”
+    bool haveValidation = false;
+    for (const auto& lp : layers) {
+      if (std::strcmp(lp.layerName, validation_layers[0]) == 0) {
+        haveValidation = true;
+        break;
+      }
+    }
+
+    if (haveValidation) {
+      std::cout << "DEBUG: enabling validation layer\n";
+      instance_create_info.enabledLayerCount   = 1;
+      instance_create_info.ppEnabledLayerNames = validation_layers;
+    } else {
+      std::cout << "DEBUG: validation layer not found, skipping\n";
+      instance_create_info.enabledLayerCount   = 0;
+      instance_create_info.ppEnabledLayerNames = nullptr;
+    }
+
+    // Chain in the debug messenger
+    debug_ci              = debug::debug_messenger_create_info();
+    instance_create_info.pNext = &debug_ci;
   } else {
-    instance_create_info.enabledLayerCount = 0;
-    instance_create_info.pNext             = nullptr;
+    instance_create_info.enabledLayerCount   = 0;
+    instance_create_info.ppEnabledLayerNames = nullptr;
+    instance_create_info.pNext               = nullptr;
   }
 
+  // Initialize Volk and create instance
   ASSERT_SUCCESS("failed to create instance",
                  vkCreateInstance(&instance_create_info, nullptr, &_ctx.instance));
+  volkLoadInstance(_ctx.instance);
 
   U32 extension_count = 0;
   vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);

@@ -4,23 +4,25 @@
 #include "ds_array_static.h"
 #include "ds_string.h"
 #include "engine.h"
+#include "exec/fightspace/simulation.h"
 #include "meshes.h"
 #include "render.h"
 #include "textures.h"
 #include "ui.h"
 #include "vulkan/handles.h"
 #include "vulkan/samplers.h"
+#include "vulkan/ssbo.h"
 #include "vulkan/ubos.h"
 #include "vulkan/vertex.h"
 
 ARENA_INIT(scratch, 10000000);
-ARENA_INIT(render, 10000000);
-ARENA_INIT(render_resources, 10000000);
-ARENA_INIT(render_ui, 10000000);
+ARENA_INIT(render, 100000000);
 ARENA_INIT(ui, 100000);
 ARENA_INIT(frame0, 100000);
 ARENA_INIT(frame1, 100000);
+ARENA_INIT(frame2, 100000);
 ARENA_INIT(fightspace, 100000);
+ARENA_INIT(level, 100000);
 
 Clay_RenderCommandArray build_ui() {
   Clay_BeginLayout();
@@ -118,8 +120,14 @@ int main() {
           },
   });
 
-  auto global_ubo  = vulkan::ubos::create_ubo(0, sizeof(vulkan::GlobalUBO));
-  auto texture_ubo = vulkan::ubos::create_texture_set(1, 1);
+  auto material_ssbo = vulkan::ssbo::create((40 * 40) * (64 * 64));
+
+  auto global_ubo  = vulkan::ubos::create_ubo_buffer(0,
+                                                    vulkan::StageFlags::SHADER_VERTEX,
+                                                    sizeof(vulkan::GlobalUBO));
+  auto texture_ubo = vulkan::ubos::create_texture_set(1, vulkan::StageFlags::SHADER_FRAGMENT, 1);
+  auto material_ssbo_ubo =
+      vulkan::ubos::create_ssbo_ubo(2, vulkan::StageFlags::SHADER_VERTEX, material_ssbo);
 
   auto render_pipeline = render::create_pipeline({
       .vertex_shader_fpath                 = "vert.spv",
@@ -127,11 +135,13 @@ int main() {
       .binding_description                 = vulkan::VERTEX_TEX_BINDING_DESC,
       .attribute_descriptions              = vulkan::VERTEX_TEX_ATTRIBUTE_DESC,
       .attribute_descriptions_format_count = array::size(vulkan::VERTEX_TEX_ATTRIBUTE_DESC),
-      .ubos                                = S_DARRAY(vulkan::UBOHandle, global_ubo, texture_ubo),
+      .ubos = S_DARRAY(vulkan::UBOHandle, global_ubo, texture_ubo, material_ssbo_ubo),
   });
 
+  init_simulation();
+
   auto world_texture = textures::create_with_staging(512, 512);
-  auto sampler = textures::create_sampler(1);
+  auto sampler       = textures::create_sampler(1);
   textures::set_sampler(world_texture, sampler);
 
   vulkan::VertexTex vertices[] = {
@@ -143,11 +153,7 @@ int main() {
 
   U32 indices[] = {0, 1, 2, 2, 1, 3};
 
-  auto mesh = meshes::create(arena::by_name("fightspace"),
-                             vertices,
-                             array::size(vertices),
-                             indices,
-                             array::size(indices));
+  auto mesh = meshes::create(vertices, array::size(vertices), indices, array::size(indices));
 
   meshes::set_constants(mesh, glm::mat4(1.0f), 0);
 
@@ -168,15 +174,17 @@ int main() {
     render::set_view_projection(global_ubo, view, proj);
     textures::set_textures(texture_ubo, S_DARRAY(vulkan::TextureHandle, {world_texture}));
 
-    r+=4;
+    simulate();
+
+    r += 2;
     U8 g = 0;
     U8 b = 0;
     U8 a = 255;
     for (U32 i = 0; i < 512; ++i) {
       for (U32 j = 0; j < 512; ++j) {
-        /* r = ++r / (i * (j + 1)); */
-        /* b                               = r - i * (j + 1);  */
-        r %= 255;
+        // r = ++r / (i * (j + 1));
+        b = (r - i * (j + 1)) % 150;
+        r %= 100;
         /* b                               = b % 150; */
         texture_data[i * 512 + j] = (U8(a) << 24) | (U8(b) << 16) | (U8(g) << 8) | U8(r);
       }

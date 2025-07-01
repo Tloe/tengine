@@ -16,9 +16,6 @@
 
 ARENA_INIT(scratch, 100000);
 ARENA_INIT(render, 10000000);
-ARENA_INIT(render_resources, 10000000);
-ARENA_INIT(render_ui, 10000000);
-ARENA_INIT(ui, 100000);
 ARENA_INIT(frame0, 100000);
 ARENA_INIT(frame1, 100000);
 ARENA_INIT(play, 100000);
@@ -41,7 +38,7 @@ int main() {
           },
   });
 
-  auto global_ubo  = vulkan::ubos::create_ubo(0, sizeof(vulkan::GlobalUBO));
+  auto global_ubo  = vulkan::ubos::create_ubo_buffer(0, sizeof(vulkan::GlobalUBO));
   auto texture_ubo = vulkan::ubos::create_texture_set(2, 1);
 
   auto render_pipeline = render::create_pipeline({
@@ -58,7 +55,7 @@ int main() {
   auto sampler        = textures::create_sampler(mip_levels);
   vulkan::textures::set_sampler(viking_texture, sampler);
 
-  auto viking_mesh = meshes::create(arena::by_name("play"), "viking_room.obj");
+  auto viking_mesh = meshes::create("viking_room.obj");
 
   auto view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
                           glm::vec3(0.0f, 0.0f, 0.0f),

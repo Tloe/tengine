@@ -1,8 +1,7 @@
 #pragma once
 
 #include "handles.h"
-
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace vulkan {
   namespace command_buffers {
@@ -15,8 +14,8 @@ namespace vulkan {
     void reset(CommandBufferHandle command_buffer);
 
     void submit(CommandBufferHandle command_buffer);
-    void cleanup(CommandBufferHandle command_buffer);
-    void submit_and_cleanup(CommandBufferHandle command_buffer);
+
+    void wait(CommandBufferHandle handle);
 
     VkCommandBuffer* buffer(CommandBufferHandle command_buffer);
   }

@@ -1,10 +1,7 @@
 #include "engine.h"
 
-#include "arena.h"
-#include "fonts.h"
 #include "render.h"
 #include "types.h"
-#include "ui.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
@@ -25,6 +22,7 @@ namespace {
 }
 
 const engine::State* engine::init(const engine::Setting& settings) {
+
   SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
   SDL_SetHint(SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1");
 
@@ -47,13 +45,14 @@ const engine::State* engine::init(const engine::Setting& settings) {
 
   render::init(settings.render, sdl_window);
 
+  printf("TENGINE - ENGINE INITIALIZED\n");
+
   return &state;
 }
 
 void engine::cleanup() {
+  printf("TENGINE - ENGINE CLEANUP\n");
   render::cleanup();
-
-  ui::cleanup_frame();
 
   SDL_DestroyWindow(sdl_window);
   SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
@@ -67,14 +66,51 @@ void engine::begin_frame() {
 
   ++frame_count;
 
-  SDL_Event e;
-  SDL_zero(e);
-  while (SDL_PollEvent(&e)) {
-    switch (e.type) {
+  SDL_Event event;
+  SDL_zero(event);
+  while (SDL_PollEvent(&event)) {
+    switch (event.type) {
       case SDL_EVENT_QUIT: {
         state.quit = true;
         break;
       }
+      case SDL_EVENT_KEY_DOWN:
+        SDL_Log("Key Down: %s", SDL_GetKeyName(event.key.));
+        if (event.key.keysym.sym == SDLK_ESCAPE) {
+          running = false;
+        }
+        break;
+
+      case SDL_EVENT_KEY_UP:
+        SDL_Log("Key Up: %s", SDL_GetKeyName(event.key.keysym.sym));
+        break;
+
+      // Mouse motion
+      case SDL_EVENT_MOUSE_MOTION:
+        SDL_Log("Mouse moved to (%d, %d)", event.motion.x, event.motion.y);
+        break;
+
+      // Mouse button press
+      case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        SDL_Log("Mouse button %d down at (%f, %f)",
+                event.button.button,
+                event.button.x,
+                event.button.y,
+                event.button.repeat);
+        break;
+
+      // Mouse button release
+      case SDL_EVENT_MOUSE_BUTTON_UP:
+        SDL_Log("Mouse button %d up at (%f, %f)",
+                event.button.button,
+                event.button.x,
+                event.button.y);
+        break;
+
+      // Mouse wheel scroll
+      case SDL_EVENT_MOUSE_WHEEL:
+        SDL_Log("Mouse wheel: (%d, %d)", event.wheel.x, event.wheel.y);
+        break;
       case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
         render::resize_framebuffers();
         break;
@@ -87,8 +123,6 @@ void engine::begin_frame() {
 
 void engine::end_frame() {
   render::end_frame();
-
-  arena::next_frame();
 
   if ((current_time - fps_last_time) > SDL_GetPerformanceFrequency()) {
     state.fps = frame_count /

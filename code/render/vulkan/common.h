@@ -3,7 +3,7 @@
 #include "ds_array_dynamic.h"
 
 #include <cstdlib>
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 struct String;
 

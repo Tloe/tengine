@@ -9,7 +9,6 @@
 #include <cstring>
 #include <types.h>
 #include <utility>
-#include <vulkan/vulkan_core.h>
 
 // https://thenumb.at/Hashtables - based on robin_hood_with_deletion algorithm
 

@@ -73,6 +73,24 @@ namespace sparse {
   }
 
   template <typename T, typename LType, U32 MI, U32 MA>
+  bool insert(TStaticSparseArray<T, LType, MI, MA>& sa, LType id) {
+    if (id >= MA || sa._size >= MI) {
+      return false;
+    }
+
+    if (sa.__lookup.data[id] != LType(-1)) {
+      sa._data.data[sa.__lookup.data[id]] = T{};
+    } else {
+      U32 data_index                       = sa._size++;
+      sa.__lookup.data[id]                 = data_index;
+      sa.__reverse_lookup.data[data_index] = id;
+      sa._data.data[data_index]            = T{};;
+    }
+
+    return true;
+  }
+
+  template <typename T, typename LType, U32 MI, U32 MA>
   void remove(TStaticSparseArray<T, LType, MI, MA>& sa, LType id) {
     if (id >= MA || sa.__lookup.data[id] == LType(-1)) return;
 

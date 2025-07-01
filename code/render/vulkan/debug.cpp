@@ -1,12 +1,12 @@
 #include "debug.h"
 
 #include "ds_array_static.h"
-#include "vulkan.h"
+#include "common.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <types.h>
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace {
   VkDebugUtilsMessengerEXT debug_messenger;
@@ -87,6 +87,8 @@ VkDebugUtilsMessengerCreateInfoEXT vulkan::debug::debug_messenger_create_info() 
                             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
   create_info.pfnUserCallback = debug_callback;
+  create_info.pUserData = nullptr;
+  create_info.pNext = nullptr;
 
   return create_info;
 }

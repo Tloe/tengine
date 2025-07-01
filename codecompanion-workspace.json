@@ -1,0 +1,45 @@
+{
+  "name": "cpp-game-engine",
+  "version": "1.0.0",
+  "system_prompt": "You are an expert C++ game engine developer. Use data oriented design principles when reasoning about the codebase.",
+  "groups": [
+    {
+      "name": "core",
+      "system_prompt": "Focus on the core engine logic. Use data oriented design principles.",
+      "data": [
+        "core_symbols"
+      ]
+    },
+    {
+      "name": "exec",
+      "system_prompt": "Focus on the executable entry points and application orchestration.",
+      "data": [
+        "exec_symbols"
+      ]
+    },
+    {
+      "name": "render",
+      "system_prompt": "Focus on rendering and graphics systems.",
+      "data": [
+        "render_symbols"
+      ]
+    }
+  ],
+  "data": {
+    "core_symbols": {
+      "type": "symbols",
+      "path": "code/core/",
+      "description": "Symbol outlines for all .cpp and .h files in the core engine logic and its subfolders."
+    },
+    "exec_symbols": {
+      "type": "symbols",
+      "path": "code/exec/",
+      "description": "Symbol outlines for all .cpp and .h files in the executable entry points and its subfolders."
+    },
+    "render_symbols": {
+      "type": "symbols",
+      "path": "code/render/",
+      "description": "Symbol outlines for all .cpp and .h files in the rendering system and its subfolders."
+    }
+  }
+}

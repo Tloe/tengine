@@ -1,18 +1,18 @@
 #include "samplers.h"
 
 #include "ds_hashmap.h"
+#include "vulkan/common.h"
 #include "vulkan/context.h"
 #include "vulkan/device.h"
 #include "vulkan/handles.h"
-#include "vulkan/vulkan.h"
+#include "vulkan_include.h"
 
 #include <cstdio>
-#include <vulkan/vulkan_core.h>
 
 namespace {
-  ArenaHandle          mem_render_resources = arena::by_name("render");
-  HashMap16<VkSampler> samplers             = hashmap::init16<VkSampler>(mem_render_resources);
-  U16                  next_handle          = 0;
+  ArenaHandle          mem_render  = arena::by_name("render");
+  HashMap16<VkSampler> samplers    = hashmap::init16<VkSampler>(mem_render);
+  U16                  next_handle = 0;
 }
 
 vulkan::TextureSamplerHandle vulkan::samplers::create(U32 mip_levels) {

@@ -1,0 +1,1 @@
+{"model_name": "deepseek-coder:6.7b-instruct", "url": "http://localhost:11434/api/chat", "token": null, "token-env": null, "rag": false, "chunk_size": 500, "rag_model": "deepseek-coder:1.3b"}

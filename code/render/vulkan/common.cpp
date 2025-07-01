@@ -1,11 +1,10 @@
-#include "vulkan.h"
+#include "common.h"
 
 #include "arena.h"
 #include "ds_array_dynamic.h"
 #include "ds_string.h"
 
 #include <SDL3/SDL_vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 DynamicArray<const char*> vulkan::required_instance_extension(bool debug) {
   U32                sdl_extension_count = 0;

@@ -5,9 +5,11 @@
 #include "ds_array_static.h"
 #include "ds_string.h"
 #include "fonts.h"
+#include "frame.h"
 #include "handles.h"
 #include "meshes.h"
 #include "render.h"
+#include "vulkan/buffers.h"
 #include "vulkan/command_buffers.h"
 #include "vulkan/handles.h"
 #include "vulkan/ubos.h"
@@ -15,17 +17,17 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/fwd.hpp>
 #include <glm/trigonometric.hpp>
+#include <utility>
 
 #define CLAY_IMPLEMENTATION
 #include "clay/clay.h"
 
 namespace {
-  ArenaHandle mem_ui = arena::by_name("render_ui");
-
-  auto _frame_meshes = A_DARRAY_CAP(MeshHandle, mem_ui, 100);
+  ArenaHandle mem_render = arena::by_name("render");
 
   ui::UiBuilderFn _ui_builder_fn;
 
@@ -35,10 +37,19 @@ namespace {
 
   const U32 NUM_CIRCLE_SEGMENTS = 16;
 
-  auto _fonts = A_DARRAY(FontHandle, mem_ui);
+  auto _fonts = A_DARRAY(FontHandle, mem_render);
 
   vulkan::UBOHandle _global_ubo;
   vulkan::UBOHandle _texture_ubo;
+
+  struct ui_frame {
+    vulkan::VertexBufferHandle vertex_buffer;
+    vulkan::Vertex2DColorTex*  vertex_mapped_memory;
+    U64                        vertex_offset;
+    vulkan::IndexBufferHandle  index_buffer;
+    U32*                       index_mapped_memory;
+    U64                        index_offset;
+  } _ui_frames[3];
 
   struct Rect {
     F32 x;
@@ -46,6 +57,35 @@ namespace {
     F32 w;
     F32 h;
   };
+
+  MeshHandle _create_mesh(vulkan::Vertex2DColorTex* vertices,
+                          U32                       vertex_count,
+                          U32*                      indices,
+                          U32                       index_count) {
+    auto current_ui_frame = &_ui_frames[render::frame::current->index];
+
+    memcpy(current_ui_frame->vertex_mapped_memory + current_ui_frame->vertex_offset,
+           vertices,
+           vertex_count * sizeof(vulkan::Vertex2DColorTex));
+
+    if (index_count > 0) {
+      memcpy(current_ui_frame->index_mapped_memory + current_ui_frame->index_offset,
+             indices,
+             index_count * sizeof(U32));
+    }
+
+    auto mesh_handle = meshes::create(current_ui_frame->vertex_buffer,
+                                      current_ui_frame->index_buffer,
+                                      vertex_count,
+                                      index_count,
+                                      current_ui_frame->vertex_offset * sizeof(vulkan::Vertex2DColorTex),
+                                      current_ui_frame->index_offset * sizeof(U32));
+
+    current_ui_frame->vertex_offset += vertex_count;
+    current_ui_frame->index_offset += index_count;
+
+    return mesh_handle;
+  }
 
   static inline Clay_Dimensions
   clay_measure_text_fn(Clay_StringSlice text, Clay_TextElementConfig* config, void* userData) {
@@ -281,10 +321,9 @@ namespace {
     indices[index_count++] = vertex_count - 1;
     indices[index_count++] = 3; // LT
 
-    // Create Vulkan buffers and copy vertex/index data
-    auto mesh = meshes::create(arena::frame(), vertices, total_vertices, indices, total_indices);
+    auto mesh = _create_mesh(vertices, total_vertices, indices, total_indices);
     render::draw(mesh);
-    array::push_back(_frame_meshes, mesh);
+    meshes::cleanup(mesh, false);
   }
 
   void draw_fill_rect(const Rect rect, glm::vec4 color) {
@@ -297,9 +336,9 @@ namespace {
 
     U32 indices[] = {0, 3, 1, 1, 3, 2};
 
-    auto mesh = meshes::create(arena::frame(), vertices, 4, indices, 6);
+    auto mesh = _create_mesh(vertices, 4, indices, 6);
     render::draw(mesh);
-    array::push_back(_frame_meshes, mesh);
+    meshes::cleanup(mesh, false);
   }
 
   void draw_arc(const glm::vec2 center,
@@ -339,7 +378,6 @@ namespace {
       U32 outer_next = (i + 1) * 2;
       U32 inner_next = (i + 1) * 2 + 1;
 
-      // Create two triangles for each quad:
       array::push_back(indices, outer_curr);
       array::push_back(indices, inner_curr);
       array::push_back(indices, outer_next);
@@ -349,9 +387,9 @@ namespace {
       array::push_back(indices, inner_next);
     }
 
-    auto mesh = meshes::create(arena::frame(), vertices, indices);
+    auto mesh = _create_mesh(vertices._data, vertices._size, indices._data, indices._size);
     render::draw(mesh);
-    array::push_back(_frame_meshes, mesh);
+    meshes::cleanup(mesh, false);
   }
 
   void draw_border(Rect& rect, Clay_BorderRenderData* clay_data) {
@@ -561,17 +599,15 @@ void draw_text(Rect& rect, Clay_TextRenderData& clay_data) {
     current_x += packed_char->xadvance;
   }
 
-  auto mesh = meshes::create(arena::frame(), vertices, vertex_count, indices, indices_count);
+  auto mesh = _create_mesh(vertices, vertex_count, indices, indices_count);
 
-  float scale = clay_data.fontSize / font.pixel_height;
-  // glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
-  //                   glm::scale(glm::mat4(1.0f), glm::vec3(scale, -scale, 1.0f));
+  float     scale = clay_data.fontSize / font.pixel_height;
   glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x, rect.y, 0.0f)) *
                     glm::scale(glm::mat4(1.0f), glm::vec3(scale, scale, 1.0f));
   meshes::set_constants(mesh, model, 0);
 
   render::draw(mesh);
-  array::push_back(_frame_meshes, mesh);
+  meshes::cleanup(mesh, false);
 }
 
 void ui::init(SDL_Window*              sdl_window,
@@ -579,7 +615,7 @@ void ui::init(SDL_Window*              sdl_window,
               DynamicArray<String>&    font_paths) {
   _sdl_window = sdl_window;
 
-  _global_ubo  = vulkan::ubos::create_ubo(0, sizeof(vulkan::GlobalUBO));
+  _global_ubo  = vulkan::ubos::create_ubo_buffer(0, sizeof(vulkan::GlobalUBO));
   _texture_ubo = vulkan::ubos::create_texture_set(1, font_paths._size);
 
   _ui_pipeline = render::create_pipeline({
@@ -595,7 +631,7 @@ void ui::init(SDL_Window*              sdl_window,
   U64        mem_size    = Clay_MinMemorySize();
   Clay_Arena clay_memory = {
       .capacity = mem_size,
-      .memory   = arena::alloc<char>(mem_ui, mem_size),
+      .memory   = arena::alloc<char>(mem_render, mem_size),
   };
 
   int width, height;
@@ -615,11 +651,26 @@ void ui::init(SDL_Window*              sdl_window,
   vulkan::ubos::set_textures(_texture_ubo, font_textures);
 
   Clay_SetMeasureTextFunction(clay_measure_text_fn, nullptr);
+
+  for (U8 i = 0; i < 3; ++i) {
+    _ui_frames[i].vertex_buffer = vulkan::vertex_buffers::create(2 * 1024 * 1024);
+    _ui_frames[i].vertex_mapped_memory =
+        static_cast<vulkan::Vertex2DColorTex*>(vulkan::buffers::map(_ui_frames[i].vertex_buffer));
+
+    _ui_frames[i].index_buffer = vulkan::index_buffers::create(2 * 1024 * 1024);
+    _ui_frames[i].index_mapped_memory =
+        static_cast<U32*>(vulkan::buffers::map(_ui_frames[i].index_buffer));
+  }
 }
 
 void ui::cleanup() {
   for (U32 i = 0; i < _fonts._size; ++i) {
     render::fonts::cleanup(_fonts._data[i]);
+  }
+
+  for (U8 i = 0; i < 3; ++i) {
+    vulkan::vertex_buffers::cleanup(_ui_frames[i].vertex_buffer);
+    vulkan::index_buffers::cleanup(_ui_frames[i].index_buffer);
   }
 
   vulkan::ubos::cleanup(_global_ubo);
@@ -628,6 +679,9 @@ void ui::cleanup() {
 
 void ui::draw_frame() {
   if (!_ui_builder_fn) return;
+
+  _ui_frames[render::frame::current->index].vertex_offset = 0;
+  _ui_frames[render::frame::current->index].index_offset  = 0;
 
   auto clay_commands = _ui_builder_fn();
 
@@ -684,19 +738,52 @@ void ui::draw_frame() {
             },
         };
 
-        auto vk_command_buffer = *vulkan::command_buffers::buffer(render::current_command_buffer());
+        auto vk_command_buffer =
+            *vulkan::command_buffers::buffer(render::frame::current->command_buffer);
 
         vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
       } break;
       case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END: {
         VkRect2D scissor = {{0, 0}, {UINT32_MAX, UINT32_MAX}};
 
-        auto vk_command_buffer = *vulkan::command_buffers::buffer(render::current_command_buffer());
+        auto vk_command_buffer =
+            *vulkan::command_buffers::buffer(render::frame::current->command_buffer);
 
         vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
       } break;
       case CLAY_RENDER_COMMAND_TYPE_IMAGE: {
-        // Vulkan texture rendering (bind image and draw quad)
+        // Clay_ImageRenderData* config = &clay_command->renderData.image;
+
+        // if (config->textureId == 0) {
+        //   // no texture, skip
+        //   break;
+        // }
+        //
+        // auto texture = render::textures::texture(TextureHandle{.value = config->textureId});
+        //
+        // if (!texture) {
+        //   printf("ui: image with id %u not found\n", config->textureId);
+        //   break;
+        // }
+        //
+        // vulkan::Vertex2DColorTex vertices[4] = {
+        //     {{rect.x, rect.y}, {1, 1, 1, 1}, {0, 0}},
+        //     {{rect.x + rect.w, rect.y}, {1, 1, 1, 1}, {1, 0}},
+        //     {{rect.x + rect.w, rect.y + rect.h}, {1, 1, 1, 1}, {1, 1}},
+        //     {{rect.x, rect.y + rect.h}, {1, 1, 1, 1}, {0, 1}},
+        // };
+        //
+        // U32 indices[] = {0, 3, 1, 1, 3, 2};
+        //
+        // auto mesh = _create_mesh(vertices, 4, indices, 6);
+        //
+        // meshes::set_texture(mesh,
+        //                     vulkan::textures::handle(texture),
+        //                     vulkan::textures::sampler(texture));
+        //
+        // render::draw(mesh);
+        // meshes::cleanup(mesh);
+        // TODO: Vulkan texture rendering (bind image and draw quad)
       } break;
       case CLAY_RENDER_COMMAND_TYPE_NONE:
         break;
@@ -704,14 +791,6 @@ void ui::draw_frame() {
         break;
     }
   }
-}
-
-void ui::cleanup_frame() {
-  for (U32 i = 0; i < _frame_meshes._size; ++i) {
-    meshes::cleanup(_frame_meshes._data[i]);
-  }
-
-  array::resize(_frame_meshes, 0);
 }
 
 void ui::set_builder(UiBuilderFn ui_builder_fn) { _ui_builder_fn = ui_builder_fn; }

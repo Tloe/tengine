@@ -3,7 +3,7 @@
 #include "types.h"
 #include "vulkan/handles.h"
 
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace vulkan::images {
   struct Size {
@@ -21,13 +21,14 @@ namespace vulkan::images {
                      VkSampleCountFlagBits numSamples);
 
   ImageHandle add(VkImage vk_image, VkFormat format, U32 mip_levels);
+  void remove(ImageHandle image);
 
   void cleanup(ImageHandle image);
 
   void create_view(ImageHandle image, VkImageAspectFlags aspect_flags);
   void cleanup_view(ImageHandle image);
 
-  void transition_layout_safe(ImageHandle image, VkImageLayout old_layout, VkImageLayout new_layout);
+  // void transition_layout_safe(ImageHandle image, VkImageLayout old_layout, VkImageLayout new_layout);
   void transition_layout(ImageHandle image, VkImageLayout old_layout, VkImageLayout new_layout);
 
   void generate_mipmaps(ImageHandle image);

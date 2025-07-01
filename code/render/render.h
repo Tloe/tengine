@@ -9,7 +9,6 @@
 
 #include <SDL3/SDL_video.h>
 #include <vulkan/glm_includes.h>
-#include <vulkan/vulkan_core.h>
 
 namespace render {
   struct MemorySettings {
@@ -36,8 +35,6 @@ namespace render {
   void set_model(vulkan::UBOHandle ubo, const glm::mat4& model, I32 texture_index = -1);
 
   void draw(MeshHandle mesh);
-
-  vulkan::CommandBufferHandle current_command_buffer();
 
   void begin_frame();
   void end_frame();

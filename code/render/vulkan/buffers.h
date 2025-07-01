@@ -2,7 +2,7 @@
 
 #include "handles.h"
 
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace vulkan {
   namespace buffers {
@@ -13,6 +13,9 @@ namespace vulkan {
     void copy(BufferHandle dst, const void* src, VkDeviceSize byte_size);
     void copy(BufferHandle dst, BufferHandle src, VkDeviceSize size);
     void copy(ImageHandle dst, BufferHandle src, U32 w, U32 h);
+
+    void* map(BufferHandle buffer);
+    void unmap(BufferHandle buffer);
 
     VkBuffer*       vk_buffer(BufferHandle buffer);
     VkDeviceMemory* vk_memory(BufferHandle buffer);

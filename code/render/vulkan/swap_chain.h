@@ -4,7 +4,7 @@
 #include "handles.h"
 
 #include <SDL3/SDL_video.h>
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace vulkan {
   extern struct SwapChain {

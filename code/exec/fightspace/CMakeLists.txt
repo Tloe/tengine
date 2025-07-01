@@ -1,8 +1,15 @@
-add_executable(fightspace main.cpp)
+set(HEADERS
+    sim.h)
+
+set(SOURCES
+    main.cpp
+    sim.cpp)
+
+target_sources(fightspace PUBLIC ${HEADERS} PRIVATE ${SOURCES})
+
+add_executable(fightspace)
 
 target_link_libraries(fightspace
-  PUBLIC
-    vulkan
   PRIVATE
     core
     render

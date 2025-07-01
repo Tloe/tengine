@@ -4,24 +4,22 @@
 #include "ds_hashmap.h"
 #include "vulkan/buffers.h"
 #include "vulkan/command_buffers.h"
+#include "vulkan/common.h"
 #include "vulkan/context.h"
 #include "vulkan/handles.h"
 #include "vulkan/images.h"
-#include "vulkan/vulkan.h"
+#include "vulkan_include.h"
 
 #include <cmath>
-#include <vulkan/vulkan_core.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
 namespace {
-  auto mem_render_resources = arena::by_name("render_resources");
+  auto mem_render = arena::by_name("render");
 
-  auto samplers = hashmap::init16<vulkan::TextureSamplerHandle>(mem_render_resources);
-
-  auto staging_buffers = hashmap::init16<vulkan::BufferHandle>(mem_render_resources);
-
-  auto staging_command_buffers = hashmap::init16<vulkan::CommandBufferHandle>(mem_render_resources);
+  auto samplers                = hashmap::init16<vulkan::TextureSamplerHandle>(mem_render);
+  auto staging_buffers         = hashmap::init16<vulkan::BufferHandle>(mem_render);
+  auto staging_command_buffers = hashmap::init16<vulkan::CommandBufferHandle>(mem_render);
 }
 
 vulkan::TextureHandle
@@ -43,7 +41,7 @@ vulkan::textures::create(U32 w, U32 h, U8* data, U32 byte_size, VkFormat format)
                              1,
                              VK_SAMPLE_COUNT_1_BIT);
 
-  vulkan::images::transition_layout_safe(texture_image,
+  vulkan::images::transition_layout(texture_image,
                                     VK_IMAGE_LAYOUT_UNDEFINED,
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -141,10 +139,7 @@ void vulkan::textures::cleanup(TextureHandle handle) {
     hashmap::erase(staging_buffers, handle.value);
   }
 
-  if (hashmap::contains(staging_command_buffers, handle.value)) {
-    vulkan::command_buffers::cleanup(*hashmap::value(staging_command_buffers, handle.value));
-    hashmap::erase(staging_command_buffers, handle.value);
-  }
+  hashmap::erase(staging_command_buffers, handle.value);
 }
 
 void vulkan::textures::set_sampler(TextureHandle handle, TextureSamplerHandle sampler) {

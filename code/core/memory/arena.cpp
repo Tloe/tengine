@@ -10,13 +10,8 @@
 
 namespace {
   const U8 MAX_ARENA_COUNT = U8_MAX;
-  const U8 NUM_FRAMES      = 2;
-  U8       _current_frame  = 0;
 
-  ArenaHandle _frames[2] = {
-      arena::by_name("frame0"),
-      arena::by_name("frame1"),
-  };
+  ArenaHandle current_frame_arena = ArenaHandle{.value = 0};
 
   struct {
     const char* name = "";
@@ -26,7 +21,7 @@ namespace {
 
   bool is_power_of_two(uintptr_t x) { return (x & (x - 1)) == 0; }
 
-  U32 align_forward(U8* ptr, U8 align) {
+  uintptr_t align_forward(U8* ptr, U8 align) {
     auto p = reinterpret_cast<uintptr_t>(ptr);
 
     assert(is_power_of_two(align));
@@ -83,12 +78,24 @@ ArenaHandle arena::by_name(const char* name) {
   assert(false && "ran out of arena allocators!");
 }
 
-ArenaHandle arena::frame() { return _frames[_current_frame]; }
+ArenaHandle arena::frame() { return current_frame_arena; }
 
-void arena::next_frame() {
-  ++_current_frame;
-  _current_frame %= NUM_FRAMES;
-  reset(_frames[_current_frame]);
+void arena::set_frame(U8 arena_index) {
+  switch (arena_index) {
+    case 0:
+      static ArenaHandle frame0 = arena::by_name("frame0");
+      current_frame_arena = frame0;
+    case 1:
+      static ArenaHandle frame1 = arena::by_name("frame1");
+      current_frame_arena = frame1;
+      break;
+    case 2:
+      static ArenaHandle frame2 = arena::by_name("frame2");
+      current_frame_arena = frame2;
+      break;
+    default:
+      assert(false && "Invalid arena index for frame");
+  }
 }
 
 U8* arena::alloc(ArenaHandle handle, U32 size, U8 align) {
@@ -98,8 +105,8 @@ U8* arena::alloc(ArenaHandle handle, U32 size, U8 align) {
   }
   auto a = &_arenas[handle.value].a;
 
-  auto curr_ptr = a->buf + a->curr_offset;
-  U32  offset   = align_forward(curr_ptr, align);
+  auto      curr_ptr = a->buf + a->curr_offset;
+  uintptr_t offset   = align_forward(curr_ptr, align);
   offset -= reinterpret_cast<uintptr_t>(a->buf);
 
   if (offset + size < a->buf_len) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace vulkan::debug {
   void init(VkInstance instance);

@@ -1,6 +1,7 @@
 add_library(render)
 
 set(HEADERS
+    defines.h
     stb/stb_image.h
     stb/stb_truetype.h
     tiny_obj_loader/tiny_obj_loader.h
@@ -8,20 +9,28 @@ set(HEADERS
     meshes.h
     fonts.h
     ui.h
-    render.h)
+    render.h
+    frame.h)
 set(SOURCES
     textures.cpp
     meshes.cpp
     fonts.cpp
     ui.cpp
-    render.cpp)
+    render.cpp
+    frame.cpp)
+
+find_package(volk REQUIRED)
+
+add_subdirectory(vulkan)
 
 find_package(glm REQUIRED)
 
 target_sources(render PUBLIC ${HEADERS} PRIVATE ${SOURCES})
 
-target_include_directories(render PUBLIC  ${CMAKE_CURRENT_LIST_DIR})
+get_target_property(VOLK_INCLUDE_DIR volk::volk INTERFACE_INCLUDE_DIRECTORIES)
 
-target_link_libraries(render PRIVATE core SDL3::SDL3 glm::glm)
+message(STATUS "Volk include dir: ${VOLK_INCLUDE_DIR}")
+target_include_directories(render PUBLIC ${CMAKE_CURRENT_LIST_DIR} ${VOLK_INCLUDE_DIR})
 
-add_subdirectory(vulkan)
+target_link_libraries(render PRIVATE core SDL3::SDL3 glm::glm volk::volk)
+

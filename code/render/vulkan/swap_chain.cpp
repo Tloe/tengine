@@ -8,14 +8,14 @@
 #include "handles.h"
 #include "images.h"
 #include "render_pass.h"
-#include "vulkan.h"
+#include "common.h"
 
 #include <SDL3/SDL_events.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <glm/common.hpp>
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace vulkan { SwapChain _swap_chain = {}; }
 
@@ -204,7 +204,9 @@ void vulkan::swap_chain::create(vulkan::RenderPassHandle render_pass, SDL_Window
 }
 
 void vulkan::swap_chain::cleanup() {
+  vulkan::images::cleanup_view(vulkan::_swap_chain.multisampling);
   vulkan::images::cleanup(vulkan::_swap_chain.multisampling);
+  vulkan::images::cleanup_view(vulkan::_swap_chain.depth);
   vulkan::images::cleanup(vulkan::_swap_chain.depth);
 
   for (U32 i = 0; i < vulkan::_swap_chain.frame_buffers._size; i++) {
@@ -216,6 +218,7 @@ void vulkan::swap_chain::cleanup() {
 
   for (U32 i = 0; i < vulkan::_swap_chain.image_handles._size; i++) {
     vulkan::images::cleanup_view(vulkan::_swap_chain.image_handles._data[i]);
+    vulkan::images::remove(vulkan::_swap_chain.image_handles._data[i]);
   }
 
   vkDestroySwapchainKHR(vulkan::_ctx.logical_device, vulkan::_swap_chain.swap_chain, nullptr);

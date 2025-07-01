@@ -2,17 +2,17 @@
 
 #include "arena.h"
 #include "command_buffers.h"
+#include "common.h"
 #include "context.h"
 #include "device.h"
 #include "ds_hashmap.h"
 #include "handle.h"
 #include "types.h"
-#include "vulkan.h"
 #include "vulkan/handles.h"
+#include "vulkan_include.h"
 
 #include <cstdio>
 #include <cstdlib>
-#include <vulkan/vulkan_core.h>
 
 namespace {
   struct ImageData {
@@ -24,9 +24,9 @@ namespace {
     vulkan::images::Size size       = {};
   };
 
-  ArenaHandle mem_render_resources = arena::by_name("render_resources");
+  ArenaHandle mem_render = arena::by_name("render");
 
-  auto _image_datas = hashmap::init16<ImageData>(mem_render_resources);
+  auto _image_datas = hashmap::init16<ImageData>(mem_render);
 
   handles::Allocator<vulkan::ImageHandle, U16, 20> _handles;
 }
@@ -103,6 +103,11 @@ vulkan::ImageHandle vulkan::images::add(VkImage vk_image, VkFormat vk_format, U3
   return image;
 }
 
+void vulkan::images::remove(vulkan::ImageHandle image) {
+  handles::free(_handles, image);
+  hashmap::erase(_image_datas, image.value);
+}
+
 void vulkan::images::cleanup(ImageHandle image) {
   auto image_data = hashmap::value(_image_datas, image.value);
 
@@ -157,74 +162,11 @@ void vulkan::images::cleanup_view(ImageHandle handle) {
   }
 }
 
-void vulkan::images::transition_layout_safe(ImageHandle   handle,
-                                            VkImageLayout old_layout,
-                                            VkImageLayout new_layout) {
-  auto image  = *vk_image(handle);
-  auto format = *vk_format(handle);
-  auto mip    = mip_levels(handle);
-
-  printf("Image: %p Format: %u Mip levels: %u\n", (void*)image, format, mip);
-  assert(image != VK_NULL_HANDLE);
-  assert(mip > 0);
-
-  VkImageMemoryBarrier barrier = {.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                  .oldLayout           = old_layout,
-                                  .newLayout           = new_layout,
-                                  .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                  .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                  .image               = image,
-                                  .subresourceRange    = {
-                                         .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-                                         .baseMipLevel   = 0,
-                                         .levelCount     = mip,
-                                         .baseArrayLayer = 0,
-                                         .layerCount     = 1,
-                                  }};
-
-  barrier.srcAccessMask = 0;
-  barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-  auto cmd = command_buffers::create();
-  command_buffers::begin(cmd);
-
-  auto image_ptr = vk_image(handle);
-  assert(image_ptr != nullptr);
-  assert(*image_ptr != VK_NULL_HANDLE);
-
-  printf("vk_image(handle): %p\n", (void*)image_ptr);
-  printf("*vk_image(handle): %p\n", (void*)*image_ptr);
-
-  printf("image: %p\n", (void*)barrier.image);
-  printf("oldLayout: %u\n", barrier.oldLayout);
-  printf("newLayout: %u\n", barrier.newLayout);
-  printf("aspectMask: %u\n", barrier.subresourceRange.aspectMask);
-  printf("baseMipLevel: %u\n", barrier.subresourceRange.baseMipLevel);
-  printf("levelCount: %u\n", barrier.subresourceRange.levelCount);
-  printf("layerCount: %u\n", barrier.subresourceRange.layerCount);
-  printf("cmd: %p\n", (void*)*command_buffers::buffer(cmd));
-
-  vkCmdPipelineBarrier(*command_buffers::buffer(cmd),
-                       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                       VK_PIPELINE_STAGE_TRANSFER_BIT,
-                       0,
-                       0,
-                       nullptr,
-                       0,
-                       nullptr,
-                       1,
-                       &barrier);
-}
 void vulkan::images::transition_layout(ImageHandle   handle,
                                        VkImageLayout old_layout,
                                        VkImageLayout new_layout) {
   auto command_buffer = command_buffers::create();
-
   command_buffers::begin(command_buffer);
-
-  printf("vkimage: %p\n", (void*)*vk_image(handle));
-  printf("mip_lvels: %d\n", mip_levels(handle));
-  printf("vk_format: %d\n", *vk_format(handle));
 
   VkImageMemoryBarrier barrier{};
   barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -279,8 +221,6 @@ void vulkan::images::transition_layout(ImageHandle   handle,
     exit(0);
   }
 
-  printf("command buffer: %p", (void*)*vulkan::command_buffers::buffer(command_buffer));
-
   vkCmdPipelineBarrier(*vulkan::command_buffers::buffer(command_buffer),
                        source_stage,
                        destination_stage,
@@ -292,7 +232,7 @@ void vulkan::images::transition_layout(ImageHandle   handle,
                        1,
                        &barrier);
 
-  command_buffers::submit_and_cleanup(command_buffer);
+  command_buffers::submit(command_buffer);
 }
 
 void vulkan::images::generate_mipmaps(ImageHandle handle) {
@@ -407,7 +347,7 @@ void vulkan::images::generate_mipmaps(ImageHandle handle) {
                        1,
                        &barrier);
 
-  command_buffers::submit_and_cleanup(command_buffer);
+  command_buffers::submit(command_buffer);
 }
 
 VkImage* vulkan::images::vk_image(ImageHandle handle) {

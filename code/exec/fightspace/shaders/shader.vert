@@ -1,9 +1,21 @@
 #version 450
 
+const uint MATERIAL_BORDER = 0u;
+const uint MATERIAL_AIR    = 1u;
+const uint MATERIAL_SAND   = 2u;
+const uint MATERIAL_WATER  = 3u;
+const uint MATERIAL_WOOD   = 4u;
+const uint MATERIAL_STONE  = 5u;
+const uint MATERIAL_FIRE   = 6u;
+
 layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4 view;
     mat4 proj;
 } globalUBO;
+
+layout(set = 2, binding = 0) buffer MaterialTypeBuffer{
+    uint materials[];
+};
 
 layout(push_constant) uniform ModelPC {
     mat4 model;

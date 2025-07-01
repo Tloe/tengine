@@ -5,10 +5,15 @@
 #include "handles.h"
 #include "types.h"
 #include "vulkan/handles.h"
-
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace vulkan {
+  enum StageFlags : U8 {
+    SHADER_VERTEX   = VK_SHADER_STAGE_VERTEX_BIT,
+    SHADER_FRAGMENT = VK_SHADER_STAGE_FRAGMENT_BIT,
+    SHADER_COMPUTE  = VK_SHADER_STAGE_COMPUTE_BIT,
+  };
+
   struct GlobalUBO {
     glm::mat4 view;
     glm::mat4 proj;
@@ -24,8 +29,10 @@ namespace vulkan {
     void init(Settings settings);
     void cleanup();
 
-    UBOHandle create_ubo(U8 set_index, U32 byte_size, U32 descriptor_count = 1);
-    UBOHandle create_texture_set(U8 set_index, U32 texture_count);
+    UBOHandle
+    create_ubo_buffer(U8 set_index, StageFlags stages, U32 byte_size, U32 descriptor_count = 1);
+    UBOHandle create_ssbo_ubo(U8 set_index, StageFlags stages, SSBOBufferHandle buffer);
+    UBOHandle create_texture_set(U8 set_index, StageFlags stages, U32 texture_count);
 
     void cleanup(UBOHandle ubo);
 

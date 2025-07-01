@@ -2,23 +2,24 @@
 
 #include "arena.h"
 #include "ds_array_dynamic.h"
+#include "frame.h"
 #include "handles.h"
 #include "meshes.h"
 #include "ui.h"
 #include "vulkan/command_buffers.h"
+#include "vulkan/common.h"
 #include "vulkan/context.h"
 #include "vulkan/handles.h"
 #include "vulkan/pipelines.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/swap_chain.h"
 #include "vulkan/ubos.h"
-#include "vulkan/vulkan.h"
+#include "vulkan/vulkan_include.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <vulkan/vulkan_core.h>
 
 namespace {
 #ifdef NDEBUG
@@ -29,62 +30,6 @@ namespace {
   bool framebuffer_resized = false;
 
   vulkan::RenderPassHandle render_pass;
-
-  const U32 MAX_FRAMES_IN_FLIGHT = 2;
-  U32       current_frame        = 0;
-  struct {
-    U32                         vk_image_index;
-    VkSemaphore                 image_available;
-    VkSemaphore                 render_finished;
-    VkFence                     in_flight_fence;
-    vulkan::CommandBufferHandle command_buffer;
-    ArenaHandle                 arena;
-    vulkan::PipelineHandle      current_pipeline;
-  } frames[MAX_FRAMES_IN_FLIGHT];
-
-  void init_frames() {
-    VkSemaphoreCreateInfo semaphore_info{};
-    semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    char frame_str[] = "frame0";
-
-    for (U8 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      ASSERT_SUCCESS("failed to create semaphores!",
-                     vkCreateSemaphore(vulkan::_ctx.logical_device,
-                                       &semaphore_info,
-                                       nullptr,
-                                       &frames[i].image_available));
-
-      ASSERT_SUCCESS("failed to create semaphores!",
-                     vkCreateSemaphore(vulkan::_ctx.logical_device,
-                                       &semaphore_info,
-                                       nullptr,
-                                       &frames[i].render_finished));
-
-      ASSERT_SUCCESS("failed to create semaphores!",
-                     vkCreateFence(vulkan::_ctx.logical_device,
-                                   &fence_info,
-                                   nullptr,
-                                   &frames[i].in_flight_fence));
-
-      frames[i].command_buffer = vulkan::command_buffers::create();
-
-      frames[i].arena = arena::by_name(frame_str);
-      snprintf(frame_str, 7, "frame%d", i);
-    }
-  }
-
-  void cleanup_frames() {
-    for (U8 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      vkDestroySemaphore(vulkan::_ctx.logical_device, frames[i].render_finished, nullptr);
-      vkDestroySemaphore(vulkan::_ctx.logical_device, frames[i].image_available, nullptr);
-      vkDestroyFence(vulkan::_ctx.logical_device, frames[i].in_flight_fence, nullptr);
-    }
-  }
 }
 
 void render::init(Settings settings, SDL_Window* sdl_window) {
@@ -100,7 +45,7 @@ void render::init(Settings settings, SDL_Window* sdl_window) {
 
   ui::init(sdl_window, render_pass, settings.ui_fonts);
 
-  init_frames();
+  frame::init(vulkan::_ctx.logical_device);
 
   arena::reset(arena::scratch());
 }
@@ -108,8 +53,8 @@ void render::init(Settings settings, SDL_Window* sdl_window) {
 void render::cleanup() {
   vulkan::swap_chain::cleanup();
 
-  cleanup_frames();
-
+  frame::cleanup(vulkan::_ctx.logical_device);
+  
   ui::cleanup();
 
   vulkan::ubos::cleanup();
@@ -127,11 +72,9 @@ vulkan::PipelineHandle render::create_pipeline(vulkan::pipelines::Settings setti
 }
 
 void render::bind_pipeline(vulkan::PipelineHandle pipeline) {
-  auto frame = &frames[current_frame];
+  vulkan::pipelines::bind(pipeline, frame::current->command_buffer);
 
-  vulkan::pipelines::bind(pipeline, frame->command_buffer);
-
-  frame->current_pipeline = pipeline;
+  frame::current->current_pipeline = pipeline;
 }
 
 void
@@ -145,27 +88,21 @@ render::set_view_projection(vulkan::UBOHandle ubo, const glm::mat4& view, const 
 }
 
 void render::draw(MeshHandle mesh) {
-  meshes::draw(frames[current_frame].current_pipeline, frames[current_frame].command_buffer, mesh);
+  meshes::draw(frame::current->current_pipeline, frame::current->command_buffer, mesh);
 }
-
-vulkan::CommandBufferHandle render::current_command_buffer() {
-  return frames[current_frame].command_buffer;
-}
-
 
 void render::begin_frame() {
-  auto frame = &frames[current_frame];
+  vkWaitForFences(vulkan::_ctx.logical_device, 1, &frame::current->fence, VK_TRUE, UINT64_MAX);
 
-  vkWaitForFences(vulkan::_ctx.logical_device, 1, &frame->in_flight_fence, VK_TRUE, UINT64_MAX);
-
-  // arena::reset(frame->arena);
+  arena::set_frame(frame::current->index);
+  arena::reset(frame::current->arena);
 
   auto result = vkAcquireNextImageKHR(vulkan::_ctx.logical_device,
                                       vulkan::_swap_chain.swap_chain,
                                       UINT64_MAX,
-                                      frame->image_available,
+                                      frame::current->image_available,
                                       VK_NULL_HANDLE,
-                                      &frame->vk_image_index);
+                                      &frame::current->vk_image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     vulkan::swap_chain::recreate();
@@ -175,15 +112,16 @@ void render::begin_frame() {
     exit(0);
   }
 
-  vkResetFences(vulkan::_ctx.logical_device, 1, &frame->in_flight_fence);
+  vkResetFences(vulkan::_ctx.logical_device, 1, &frame::current->fence);
 
-  vulkan::command_buffers::reset(frame->command_buffer);
+  vulkan::command_buffers::wait(frame::current->command_buffer);
+  vulkan::command_buffers::reset(frame::current->command_buffer);
+  auto vk_command_buffer = *vulkan::command_buffers::begin(frame::current->command_buffer);
 
-  auto vk_command_buffer = *vulkan::command_buffers::begin(frame->command_buffer);
-
-  vulkan::render_pass::begin(render_pass,
-                             frame->command_buffer,
-                             vulkan::_swap_chain.frame_buffers._data[frame->vk_image_index]);
+  vulkan::render_pass::begin(
+      render_pass,
+      frame::current->command_buffer,
+      vulkan::_swap_chain.frame_buffers._data[frame::current->vk_image_index]);
 
   VkViewport viewport{
       .x        = 0.0f,
@@ -203,32 +141,31 @@ void render::begin_frame() {
 }
 
 void render::end_frame() {
-  auto frame = &frames[current_frame];
-
   ui::draw_frame();
 
-  vulkan::render_pass::end(frame->command_buffer);
+  vulkan::render_pass::end(frame::current->command_buffer);
 
-  ASSERT_SUCCESS("failed to record command buffer!",
-                 vkEndCommandBuffer(*vulkan::command_buffers::buffer(frame->command_buffer)));
+  ASSERT_SUCCESS(
+      "failed to record command buffer!",
+      vkEndCommandBuffer(*vulkan::command_buffers::buffer(frame::current->command_buffer)));
 
-  VkSemaphore          wait_semaphores[]   = {frame->image_available};
-  VkSemaphore          signal_semaphores[] = {frame->render_finished};
+  VkSemaphore          wait_semaphores[]   = {frame::current->image_available};
+  VkSemaphore          signal_semaphores[] = {frame::current->render_finished};
   VkPipelineStageFlags wait_stages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
   VkSubmitInfo submit_info{};
-  submit_info.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit_info.waitSemaphoreCount   = 1;
-  submit_info.pWaitSemaphores      = wait_semaphores;
-  submit_info.pWaitDstStageMask    = wait_stages;
-  submit_info.commandBufferCount   = 1;
-  submit_info.pCommandBuffers      = vulkan::command_buffers::buffer(frame->command_buffer);
+  submit_info.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.waitSemaphoreCount = 1;
+  submit_info.pWaitSemaphores    = wait_semaphores;
+  submit_info.pWaitDstStageMask  = wait_stages;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers    = vulkan::command_buffers::buffer(frame::current->command_buffer);
   submit_info.signalSemaphoreCount = 1;
   submit_info.pSignalSemaphores    = signal_semaphores;
 
   ASSERT_SUCCESS(
       "failed to submit draw command buffer!",
-      vkQueueSubmit(vulkan::_ctx.graphics_queue, 1, &submit_info, frame->in_flight_fence));
+      vkQueueSubmit(vulkan::_ctx.graphics_queue, 1, &submit_info, frame::current->fence));
 
   VkSwapchainKHR swap_chains[] = {vulkan::_swap_chain.swap_chain};
 
@@ -238,7 +175,7 @@ void render::end_frame() {
   present_info.pWaitSemaphores    = signal_semaphores;
   present_info.swapchainCount     = 1;
   present_info.pSwapchains        = swap_chains;
-  present_info.pImageIndices      = &frame->vk_image_index;
+  present_info.pImageIndices      = &frame::current->vk_image_index;
   present_info.pResults           = nullptr;
 
   auto result = vkQueuePresentKHR(vulkan::_ctx.present_queue, &present_info);
@@ -251,14 +188,9 @@ void render::end_frame() {
     exit(0);
   }
 
-  current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-
   vkDeviceWaitIdle(vulkan::_ctx.logical_device);
 
-  ui::cleanup_frame();
-
-  meshes::reset_arena(arena::frame());
+  frame::current = frame::next();
 }
 
 void render::resize_framebuffers() { framebuffer_resized = true; }
-

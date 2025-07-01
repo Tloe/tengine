@@ -3,7 +3,7 @@
 #include "ds_array_dynamic.h"
 #include "handles.h"
 #include "vulkan/handles.h"
-#include <vulkan/vulkan_core.h>
+#include "vulkan/vulkan_include.h"
 
 namespace textures {
   TextureHandle create(U32 w, U32 h, U8* data, U32 byte_size, VkFormat format);

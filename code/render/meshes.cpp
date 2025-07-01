@@ -1,7 +1,10 @@
-#include "../resource_registry.h"
+#include "meshes.h"
+
 #include "arena.h"
+#include "defines.h"
 #include "ds_array_dynamic.h"
 #include "ds_hashmap.h"
+#include "ds_sparse_array.h"
 #include "handle.h"
 #include "handles.h"
 #include "vulkan/buffers.h"
@@ -10,9 +13,7 @@
 #include "vulkan/handles.h"
 #include "vulkan/pipelines.h"
 #include "vulkan/vertex.h"
-
-#include <meshes.h>
-#include <vulkan/vulkan_core.h>
+#include "vulkan/vulkan_include.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader/tiny_obj_loader.h>
@@ -20,15 +21,17 @@
 namespace {
   struct Mesh {
     vulkan::VertexBufferHandle vertex_buffer;
-    U32                        vertex_count;
+    U32                        vertex_count       = 0;
+    U32                        vertex_byte_offset = 0;
     vulkan::IndexBufferHandle  index_buffer;
-    U32                        index_count;
+    U32                        index_count       = 0;
+    U32                        index_byte_offset = 0;
     MeshGPUConstants           gpu_constants;
   };
 
-  ArenaHandle mem_render_resource = arena::by_name("render_resources");
+  ArenaHandle mem_render = arena::by_name("render");
 
-  auto _meshes = resource_registry::init<Mesh, 200>(mem_render_resource, "Mesh");
+  auto _meshes = sparse::init16<Mesh, MESH_COUNT, MESH_COUNT>(mem_render);
 }
 
 namespace hashmap {
@@ -52,7 +55,7 @@ namespace hashmap {
   }
 }
 
-MeshHandle meshes::create(ArenaHandle arena, const char* fpath) {
+MeshHandle meshes::create(const char* fpath) {
   tinyobj::attrib_t                attrib;
   std::vector<tinyobj::shape_t>    shapes;
   std::vector<tinyobj::material_t> materials;
@@ -98,11 +101,14 @@ MeshHandle meshes::create(ArenaHandle arena, const char* fpath) {
       .index_count   = indices._size,
   };
 
-  return resource_registry::insert<MeshHandle>(_meshes, arena, mesh);
+  MeshHandle mesh_handle = MeshHandle{.value = sparse::next_id(_meshes)};
+
+  sparse::insert(_meshes, mesh_handle.value, mesh);
+
+  return mesh_handle;
 }
 
-MeshHandle meshes::create(ArenaHandle                arena,
-                          vulkan::VertexBufferHandle vertex_buffer,
+MeshHandle meshes::create(vulkan::VertexBufferHandle vertex_buffer,
                           vulkan::IndexBufferHandle  index_buffer,
                           U32                        vertex_count,
                           U32                        index_count) {
@@ -113,30 +119,63 @@ MeshHandle meshes::create(ArenaHandle                arena,
       .index_count   = index_count,
   };
 
-  return resource_registry::insert<MeshHandle>(_meshes, arena, mesh);
+  MeshHandle mesh_handle = MeshHandle{.value = sparse::next_id(_meshes)};
+
+  sparse::insert(_meshes, mesh_handle.value, mesh);
+
+  return mesh_handle;
+}
+
+MeshHandle meshes::create(vulkan::VertexBufferHandle vertex_buffer,
+                          vulkan::IndexBufferHandle  index_buffer,
+                          U32                        vertex_count,
+                          U32                        index_count,
+                          U32                        vertex_byte_offset,
+                          U32                        index_byte_offset) {
+  Mesh mesh{
+      .vertex_buffer      = vertex_buffer,
+      .vertex_count       = vertex_count,
+      .vertex_byte_offset = vertex_byte_offset,
+      .index_buffer       = index_buffer,
+      .index_count        = index_count,
+      .index_byte_offset  = index_byte_offset,
+  };
+
+  MeshHandle mesh_handle = MeshHandle{.value = sparse::next_id(_meshes)};
+
+  sparse::insert(_meshes, mesh_handle.value, mesh);
+
+  return mesh_handle;
 }
 
 void meshes::set_constants(MeshHandle handle, glm::mat4 model, I32 texture_index) {
-  auto mesh = resource_registry::value(_meshes, handle);
+  auto mesh = sparse::value(_meshes, handle.value);
 
   mesh->gpu_constants = {model, texture_index};
 }
 
-void meshes::cleanup(MeshHandle handle) {
-  auto mesh = resource_registry::value(_meshes, handle);
+void meshes::cleanup(MeshHandle handle, bool cleanup_buffers) {
+  auto mesh = sparse::value(_meshes, handle.value);
 
-  vulkan::vertex_buffers::cleanup(mesh->vertex_buffer);
-  if (!handles::invalid(mesh->index_buffer)) {
-    vulkan::index_buffers::cleanup(mesh->index_buffer);
+  if (cleanup_buffers) {
+    vulkan::vertex_buffers::cleanup(mesh->vertex_buffer);
+    if (!handles::invalid(mesh->index_buffer)) {
+      vulkan::index_buffers::cleanup(mesh->index_buffer);
+    }
   }
 
-  resource_registry::remove(_meshes, handle);
+  sparse::remove(_meshes, handle.value);
 }
 
 void meshes::draw(vulkan::PipelineHandle      pipeline,
                   vulkan::CommandBufferHandle command_buffer,
                   MeshHandle                  handle) {
-  auto mesh = resource_registry::value(_meshes, handle);
+  auto mesh = sparse::value(_meshes, handle.value);
+
+  if (!mesh) {
+    printf("MeshHandle not found");
+    exit(0);
+  }
 
   VkBuffer vertex_buffers[] = {
       *vulkan::buffers::vk_buffer(mesh->vertex_buffer),
@@ -144,12 +183,16 @@ void meshes::draw(vulkan::PipelineHandle      pipeline,
 
   auto vk_command_buffer = *vulkan::command_buffers::buffer(command_buffer);
 
-  VkDeviceSize offsets[] = {0};
+  VkDeviceSize offsets[] = {mesh->vertex_byte_offset};
+
   vkCmdBindVertexBuffers(vk_command_buffer, 0, 1, vertex_buffers, offsets);
 
   if (!handles::invalid(mesh->index_buffer)) {
     auto index_buffer = *vulkan::buffers::vk_buffer(mesh->index_buffer);
-    vkCmdBindIndexBuffer(vk_command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(vk_command_buffer,
+                         index_buffer,
+                         mesh->index_byte_offset,
+                         VK_INDEX_TYPE_UINT32);
 
     vkCmdPushConstants(vk_command_buffer,
                        *vulkan::pipelines::layout(pipeline),
@@ -162,8 +205,4 @@ void meshes::draw(vulkan::PipelineHandle      pipeline,
   } else {
     vkCmdDraw(vk_command_buffer, mesh->vertex_count, 1, 0, 0);
   }
-}
-
-void meshes::reset_arena(ArenaHandle arena) {
-  resource_registry::reset_arena_storage<MeshHandle>(_meshes, arena.value);
 }

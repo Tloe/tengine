@@ -9,12 +9,12 @@
 #include "meshes.h"
 #include "render_pass.h"
 #include "swap_chain.h"
-#include "vulkan.h"
+#include "common.h"
 #include "vulkan/command_buffers.h"
 #include "vulkan/ubos.h"
 
 #include <cstdio>
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 namespace {
   ArenaHandle mem_render = arena::by_name("render");

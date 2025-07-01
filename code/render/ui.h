@@ -15,7 +15,7 @@ namespace ui {
   void cleanup();
 
   void draw_frame();
-  void cleanup_frame();
+  // void cleanup_frame();
 
   void set_builder(UiBuilderFn ui_builder_fn);
 }

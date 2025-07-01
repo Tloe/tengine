@@ -3,7 +3,7 @@
 #include "glm_includes.h"
 
 #include <cstddef>
-#include <vulkan/vulkan_core.h>
+#include "vulkan_include.h"
 
 // TODO DESC as members of struct's
 //

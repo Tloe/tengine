@@ -7,11 +7,11 @@
 #include "ds_array_static.h"
 #include "ds_hashmap.h"
 #include "swap_chain.h"
-#include "vulkan.h"
+#include "vulkan/common.h"
 #include "vulkan/swap_chain.h"
+#include "vulkan_include.h"
 
 #include <cstdio>
-#include <vulkan/vulkan_core.h>
 
 namespace {
   HashMap16<VkRenderPass> render_passes = hashmap::init16<VkRenderPass>(arena::by_name("render"));
@@ -105,14 +105,14 @@ vulkan::RenderPassHandle vulkan::render_pass::create() {
   return handle;
 }
 
-void vulkan::render_pass::cleanup(RenderPassHandle handle) {
+void vulkan::render_pass::cleanup(RenderPassHandle render_pass) {
   vkDestroyRenderPass(vulkan::_ctx.logical_device,
-                      *hashmap::value(::render_passes, handle.value),
+                      *hashmap::value(::render_passes, render_pass.value),
                       nullptr);
 }
 
-void vulkan::render_pass::begin(RenderPassHandle    handle,
-                                CommandBufferHandle command_buffer_handle,
+void vulkan::render_pass::begin(RenderPassHandle    render_pass,
+                                CommandBufferHandle command_buffer,
                                 VkFramebuffer       framebuffer) {
   VkClearValue clear_values[2] = {{}};
   clear_values[0].color        = {{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -120,14 +120,14 @@ void vulkan::render_pass::begin(RenderPassHandle    handle,
 
   VkRenderPassBeginInfo render_pass_info{};
   render_pass_info.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  render_pass_info.renderPass        = *render_pass(handle);
+  render_pass_info.renderPass        = *render_pass::render_pass(render_pass);
   render_pass_info.framebuffer       = framebuffer;
   render_pass_info.renderArea.offset = {0, 0};
   render_pass_info.renderArea.extent = vulkan::_swap_chain.extent;
   render_pass_info.clearValueCount   = array::size(clear_values);
   render_pass_info.pClearValues      = clear_values;
 
-  vkCmdBeginRenderPass(*command_buffers::buffer(command_buffer_handle),
+  vkCmdBeginRenderPass(*command_buffers::buffer(command_buffer),
                        &render_pass_info,
                        VK_SUBPASS_CONTENTS_INLINE);
 }
@@ -136,6 +136,6 @@ void vulkan::render_pass::end(CommandBufferHandle command_buffer_handle) {
   vkCmdEndRenderPass(*command_buffers::buffer(command_buffer_handle));
 }
 
-VkRenderPass* vulkan::render_pass::render_pass(RenderPassHandle handle) {
-  return hashmap::value(::render_passes, handle.value);
+VkRenderPass* vulkan::render_pass::render_pass(RenderPassHandle render_pass) {
+  return hashmap::value(::render_passes, render_pass.value);
 }

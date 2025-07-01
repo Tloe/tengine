@@ -17,32 +17,35 @@ struct alignas(16) MeshGPUConstants {
 };
 
 namespace meshes {
-  MeshHandle create(ArenaHandle arena, const char* fpath);
-  MeshHandle create(ArenaHandle                arena,
-                    vulkan::VertexBufferHandle vertex_buffer,
+  void reset_lifetime(LifeTime lifetime);
+
+  MeshHandle create(const char* fpath);
+  MeshHandle create(vulkan::VertexBufferHandle vertex_buffer,
                     vulkan::IndexBufferHandle  index_buffer,
                     U32                        vertex_count,
                     U32                        index_count);
+  MeshHandle create(vulkan::VertexBufferHandle vertex_buffer,
+                    vulkan::IndexBufferHandle  index_buffer,
+                    U32                        vertex_count,
+                    U32                        index_count,
+                    U32                        vertex_byte_offset,
+                    U32                        index_byte_offset);
+
+  void cleanup(MeshHandle handle, bool cleanup_buffers = true);
 
   void set_constants(MeshHandle handle, glm::mat4 model, I32 texture_index = -1);
-
-  void cleanup(MeshHandle handle);
 
   void draw(vulkan::PipelineHandle      pipeline,
             vulkan::CommandBufferHandle command_buffer,
             MeshHandle                  handle);
 
-  void reset_arena(ArenaHandle arena);
-
   // templated
   template <typename VertexT>
-  MeshHandle create(ArenaHandle    arena,
-                    const VertexT* vertices,
+  MeshHandle create(const VertexT* vertices,
                     const U32      vertices_size,
                     const U32*     indices,
                     const U32      indices_size) {
-    return create(arena,
-                  vulkan::vertex_buffers::create(static_cast<const void*>(vertices),
+    return create(vulkan::vertex_buffers::create(static_cast<const void*>(vertices),
                                                  vertices_size * sizeof(VertexT)),
                   vulkan::index_buffers::create(indices, indices_size),
                   vertices_size,
@@ -50,26 +53,19 @@ namespace meshes {
   }
 
   template <typename VertexT>
-  MeshHandle create(ArenaHandle            arena,
-                    DynamicArray<VertexT>& vertices,
-                    DynamicArray<U32>&     indices = S_DARRAY_EMPTY(VertexT)) {
+  MeshHandle
+  create(DynamicArray<VertexT>& vertices, DynamicArray<U32>& indices = S_DARRAY_EMPTY(VertexT)) {
     if (indices._size == 0) {
-      return create(arena,
-                    vulkan::vertex_buffers::create(vertices),
+      return create(vulkan::vertex_buffers::create(vertices),
                     vulkan::IndexBufferHandle(),
                     vertices._size,
                     0);
     }
 
-    return create(arena,
-                  vulkan::vertex_buffers::create(vertices),
+    return create(vulkan::vertex_buffers::create(vertices),
                   vulkan::index_buffers::create(indices),
                   vertices._size,
                   indices._size);
   }
 
-  // template <typename VertexT>
-  // MeshHandle create(DynamicArray<VertexT>& vertices) {
-  //   return create(vulkan::vertex_buffers::create(vertices), vulkan::IndexBufferHandle());
-  // }
 }

@@ -1,4 +1,5 @@
 set(HEADERS
+    vulkan_include.h
     textures.h
     command_buffers.h
     ubos.h
@@ -14,9 +15,11 @@ set(HEADERS
     glm_includes.h
     swap_chain.h
     debug.h
-    vulkan.h
-    context.h)
+    common.h
+    context.h
+    ssbo.h)
 set(SOURCES
+    volk_loader.cpp
     textures.cpp
     command_buffers.cpp
     ubos.cpp
@@ -30,7 +33,8 @@ set(SOURCES
     pipelines.cpp
     swap_chain.cpp
     debug.cpp
-    vulkan.cpp
-    context.cpp)
+    common.cpp
+    context.cpp
+    ssbo.cpp)
 
 target_sources(render PUBLIC ${HEADERS} PRIVATE ${SOURCES})
