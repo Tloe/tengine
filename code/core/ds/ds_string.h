@@ -6,6 +6,7 @@
 
 struct String {
   U32         _size = 0;
+  U32        _capacity = 0;
   char*       _data = nullptr;
   ArenaHandle _arena_handle;
 };

@@ -12,6 +12,7 @@
 #include "vulkan/buffers.h"
 #include "vulkan/command_buffers.h"
 #include "vulkan/handles.h"
+#include "vulkan/textures.h"
 #include "vulkan/ubos.h"
 #include "vulkan/vertex.h"
 
@@ -74,12 +75,13 @@ namespace {
              index_count * sizeof(U32));
     }
 
-    auto mesh_handle = meshes::create(current_ui_frame->vertex_buffer,
-                                      current_ui_frame->index_buffer,
-                                      vertex_count,
-                                      index_count,
-                                      current_ui_frame->vertex_offset * sizeof(vulkan::Vertex2DColorTex),
-                                      current_ui_frame->index_offset * sizeof(U32));
+    auto mesh_handle =
+        meshes::create(current_ui_frame->vertex_buffer,
+                       current_ui_frame->index_buffer,
+                       vertex_count,
+                       index_count,
+                       current_ui_frame->vertex_offset * sizeof(vulkan::Vertex2DColorTex),
+                       current_ui_frame->index_offset * sizeof(U32));
 
     current_ui_frame->vertex_offset += vertex_count;
     current_ui_frame->index_offset += index_count;
@@ -615,13 +617,17 @@ void ui::init(SDL_Window*              sdl_window,
               DynamicArray<String>&    font_paths) {
   _sdl_window = sdl_window;
 
-  _global_ubo  = vulkan::ubos::create_ubo_buffer(0, sizeof(vulkan::GlobalUBO));
-  _texture_ubo = vulkan::ubos::create_texture_set(1, font_paths._size);
+  _global_ubo = vulkan::ubos::create_ubo_buffer(0,
+                                                vulkan::StageFlags::SHADER_VERTEX,
+                                                sizeof(vulkan::GlobalUBO));
+  _texture_ubo =
+      vulkan::ubos::create_texture_set(1, vulkan::StageFlags::SHADER_FRAGMENT, font_paths._size);
 
   _ui_pipeline = render::create_pipeline({
       .vertex_shader_fpath                 = "vert_ui.spv",
       .fragment_shader_fpath               = "frag_ui.spv",
-      .binding_description                 = vulkan::VERTEX2D_COLOR_TEX_BINDING_DESC,
+      .binding_description_count           = 1,
+      .binding_description                 = &vulkan::VERTEX2D_COLOR_TEX_BINDING_DESC,
       .attribute_descriptions              = vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC,
       .attribute_descriptions_format_count = array::size(vulkan::VERTEX2D_COLOR_TEX_ATTRIBUTE_DESC),
       .ubos                                = S_DARRAY(vulkan::UBOHandle, _global_ubo, _texture_ubo),

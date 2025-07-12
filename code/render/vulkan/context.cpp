@@ -89,7 +89,7 @@ namespace {
                                  &graphics_family_index,
                                  &present_family_index);
 
-    auto unique_queue_families = S_DARRAY_EMPTY(U32);
+    auto unique_queue_families = S_DARRAY(U32);
 
     array::push_back_unique(unique_queue_families, graphics_family_index);
     array::push_back_unique(unique_queue_families, present_family_index);

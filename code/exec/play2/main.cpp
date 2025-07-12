@@ -15,11 +15,9 @@
 
 ARENA_INIT(scratch, 10000000);
 ARENA_INIT(render, 100000000);
-ARENA_INIT(ui, 100000);
 ARENA_INIT(frame0, 100000);
 ARENA_INIT(frame1, 100000);
 ARENA_INIT(frame2, 100000);
-ARENA_INIT(fightspace, 100000);
 ARENA_INIT(level, 100000);
 
 Clay_RenderCommandArray build_ui() {
@@ -126,7 +124,8 @@ int main() {
   auto render_pipeline = render::create_pipeline({
       .vertex_shader_fpath                 = "vert.spv",
       .fragment_shader_fpath               = "frag.spv",
-      .binding_description                 = vulkan::VERTEX_TEX_BINDING_DESC,
+      .binding_description_count           = 1,
+      .binding_description                 = &vulkan::VERTEX_TEX_BINDING_DESC,
       .attribute_descriptions              = vulkan::VERTEX_TEX_ATTRIBUTE_DESC,
       .attribute_descriptions_format_count = array::size(vulkan::VERTEX_TEX_ATTRIBUTE_DESC),
       .ubos                                = S_DARRAY(vulkan::UBOHandle, global_ubo, texture_ubo),

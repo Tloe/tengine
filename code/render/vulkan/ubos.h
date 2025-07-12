@@ -22,6 +22,7 @@ namespace vulkan {
   namespace ubos {
     struct Settings {
       U32 ubo_count         = 0;
+      U32 ssbo_count        = 0;
       U32 max_textures      = 0;
       U32 texture_set_count = 0;
     };
@@ -36,12 +37,13 @@ namespace vulkan {
 
     void cleanup(UBOHandle ubo);
 
-    void set_ubo(UBOHandle ubo, void* data);
     void set_textures(UBOHandle ubo, DynamicArray<vulkan::TextureHandle> textures);
     U32  texture_index(vulkan::TextureHandle texture);
 
     void bind(UBOHandle ubo, CommandBufferHandle command_buffer, PipelineHandle pipeline);
 
     VkDescriptorSetLayout descriptor_set_layout(UBOHandle ubo);
+
+    U8* mapped(UBOHandle ubo);
   }
 }

@@ -54,7 +54,7 @@ void render::cleanup() {
   vulkan::swap_chain::cleanup();
 
   frame::cleanup(vulkan::_ctx.logical_device);
-  
+
   ui::cleanup();
 
   vulkan::ubos::cleanup();
@@ -84,7 +84,13 @@ render::set_view_projection(vulkan::UBOHandle ubo, const glm::mat4& view, const 
       .proj = proj,
   };
 
-  vulkan::ubos::set_ubo(ubo, reinterpret_cast<void*>(&global_ubo));
+  
+  memcpy(vulkan::ubos::mapped(ubo), &global_ubo, sizeof(global_ubo));
+}
+
+void render::draw() {
+  // TODO : move to vulkan
+  vkCmdDraw(*vulkan::command_buffers::buffer(frame::current->command_buffer), 3, 1, 0, 0);
 }
 
 void render::draw(MeshHandle mesh) {

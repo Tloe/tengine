@@ -7,6 +7,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <execinfo.h>
+#include <cxxabi.h>
+#include <cstdlib>
+#include <cstdio>
+#include <string>
+#include <regex>
 
 namespace {
   const U8 MAX_ARENA_COUNT = U8_MAX;
@@ -99,6 +105,7 @@ void arena::set_frame(U8 arena_index) {
 }
 
 U8* arena::alloc(ArenaHandle handle, U32 size, U8 align) {
+  assert(size > 0 && "Size must be greater than 0");
   if (_arenas[handle.value].a.buf_len == 0) {
     printf("arena '%s' has not been set up", _arenas[handle.value].name);
     exit(0);
@@ -155,6 +162,7 @@ U8* arena::resize(ArenaHandle handle, U8* old_mem, U32 old_size, U32 new_size, U
 }
 
 void arena::reset(ArenaHandle handle) {
+  // printf("Resetting arena '%s'\n", _arenas[handle.value].name);
   auto a = &_arenas[handle.value].a;
 
   a->curr_offset = 0;

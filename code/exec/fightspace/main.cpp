@@ -7,22 +7,18 @@
 #include "exec/fightspace/simulation.h"
 #include "meshes.h"
 #include "render.h"
-#include "textures.h"
 #include "ui.h"
 #include "vulkan/handles.h"
-#include "vulkan/samplers.h"
 #include "vulkan/ssbo.h"
 #include "vulkan/ubos.h"
 #include "vulkan/vertex.h"
 
 ARENA_INIT(scratch, 10000000);
 ARENA_INIT(render, 100000000);
-ARENA_INIT(ui, 100000);
 ARENA_INIT(frame0, 100000);
 ARENA_INIT(frame1, 100000);
 ARENA_INIT(frame2, 100000);
-ARENA_INIT(fightspace, 100000);
-ARENA_INIT(level, 100000);
+ARENA_INIT(level, 100000000);
 
 Clay_RenderCommandArray build_ui() {
   Clay_BeginLayout();
@@ -30,8 +26,9 @@ Clay_RenderCommandArray build_ui() {
   CLAY({
       .layout =
           {
-              .sizing  = {.width = CLAY_SIZING_FIXED(200), .height = CLAY_SIZING_FIXED(500)},
-              .padding = CLAY_PADDING_ALL(16),
+              .sizing          = {.width  = CLAY_SIZING_FIXED(200),
+                                  .height = CLAY_SIZING_FIXED(500)},
+              .padding         = CLAY_PADDING_ALL(16),
               .layoutDirection = CLAY_TOP_TO_BOTTOM,
           },
   }) {
@@ -55,7 +52,8 @@ Clay_RenderCommandArray build_ui() {
             },
     }) {
       CLAY({
-          .layout = {.sizing = {.width = CLAY_SIZING_PERCENT(.9), .height = CLAY_SIZING_FIXED(50)}},
+          .layout          = {.sizing = {.width  = CLAY_SIZING_PERCENT(.9),
+                                         .height = CLAY_SIZING_FIXED(50)}},
           .backgroundColor = {.r = 0, .g = 0, .b = 100, .a = 255},
           .cornerRadius    = CLAY_CORNER_RADIUS(8),
           .border =
@@ -99,6 +97,7 @@ Clay_RenderCommandArray build_ui() {
   for (I32 i = 0; i < clay_commands.length; i++) {
     Clay_RenderCommandArray_Get(&clay_commands, i)->boundingBox.y += 0;
   }
+
   return clay_commands;
 }
 
@@ -108,99 +107,66 @@ int main() {
           {
               .max_frames   = 2,
               .max_textures = 10,
-              .width        = 1200,
-              .height       = 1024,
-              .ui_fonts     = S_DARRAY(String, {S_STRING("Roboto-Regular.ttf")}),
+              .width        = 1920,
+              .height       = 1080,
+              .ui_fonts = S_DARRAY(String, {S_STRING("Roboto-Regular.ttf")}),
               .ubo_settings =
                   vulkan::ubos::Settings{
                       .ubo_count         = 2,
+                      .ssbo_count        = 1,
                       .max_textures      = 4,
                       .texture_set_count = 2,
                   },
           },
   });
 
-  auto material_ssbo = vulkan::ssbo::create((40 * 40) * (64 * 64));
+  auto material_ssbo = vulkan::ssbo::create(192 * 108 * sizeof(U8));
 
-  auto global_ubo  = vulkan::ubos::create_ubo_buffer(0,
-                                                    vulkan::StageFlags::SHADER_VERTEX,
-                                                    sizeof(vulkan::GlobalUBO));
-  auto texture_ubo = vulkan::ubos::create_texture_set(1, vulkan::StageFlags::SHADER_FRAGMENT, 1);
+  auto texture_ubo =
+      vulkan::ubos::create_texture_set(0,
+                                       vulkan::StageFlags::SHADER_FRAGMENT,
+                                       1);
+
   auto material_ssbo_ubo =
-      vulkan::ubos::create_ssbo_ubo(2, vulkan::StageFlags::SHADER_VERTEX, material_ssbo);
+      vulkan::ubos::create_ssbo_ubo(1,
+                                    vulkan::StageFlags::SHADER_FRAGMENT,
+                                    material_ssbo);
 
   auto render_pipeline = render::create_pipeline({
-      .vertex_shader_fpath                 = "vert.spv",
-      .fragment_shader_fpath               = "frag.spv",
-      .binding_description                 = vulkan::VERTEX_TEX_BINDING_DESC,
-      .attribute_descriptions              = vulkan::VERTEX_TEX_ATTRIBUTE_DESC,
-      .attribute_descriptions_format_count = array::size(vulkan::VERTEX_TEX_ATTRIBUTE_DESC),
-      .ubos = S_DARRAY(vulkan::UBOHandle, global_ubo, texture_ubo, material_ssbo_ubo),
+      .vertex_shader_fpath   = "vert.spv",
+      .fragment_shader_fpath = "frag.spv",
+      .ubos = S_DARRAY(vulkan::UBOHandle, texture_ubo, material_ssbo_ubo),
   });
 
-  init_simulation();
+  simulation::init(0, 0, 1000, 1000, vulkan::ubos::mapped(material_ssbo_ubo));
 
-  auto world_texture = textures::create_with_staging(512, 512);
-  auto sampler       = textures::create_sampler(1);
-  textures::set_sampler(world_texture, sampler);
-
-  vulkan::VertexTex vertices[] = {
-      {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
-      {{1.0f, -1.0f, 0.0f}, {1.0f, 0.0f}},
-      {{-1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
-      {{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+  vulkan::Vertex2D vertices[] = {
+      {{-1.0f, -1.0f}},
+      {{3.0f, -1.0f}},
+      {{-1.0f, 3.0f}},
   };
 
-  U32 indices[] = {0, 1, 2, 2, 1, 3};
-
-  auto mesh = meshes::create(vertices, array::size(vertices), indices, array::size(indices));
+  auto mesh = meshes::create(vertices, array::size(vertices));
 
   meshes::set_constants(mesh, glm::mat4(1.0f), 0);
 
-  auto view = glm::mat4(1.0f);
-  auto proj = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
-  proj[1][1] *= -1;
-
-  U32 texture_data[512 * 512];
-
   ui::set_builder(build_ui);
-
-  U8 r = 255;
 
   while (!state->quit) {
     engine::begin_frame();
     render::bind_pipeline(render_pipeline);
 
-    render::set_view_projection(global_ubo, view, proj);
-    textures::set_textures(texture_ubo, S_DARRAY(vulkan::TextureHandle, {world_texture}));
+    simulation::simulate();
 
-    simulate();
-
-    r += 2;
-    U8 g = 0;
-    U8 b = 0;
-    U8 a = 255;
-    for (U32 i = 0; i < 512; ++i) {
-      for (U32 j = 0; j < 512; ++j) {
-        // r = ++r / (i * (j + 1));
-        b = (r - i * (j + 1)) % 150;
-        r %= 100;
-        /* b                               = b % 150; */
-        texture_data[i * 512 + j] = (U8(a) << 24) | (U8(b) << 16) | (U8(g) << 8) | U8(r);
-      }
-    }
-
-    textures::set_data(world_texture, texture_data, static_cast<U64>(sizeof(U32) * 512 * 512));
-    render::draw(mesh);
+    render::draw();
 
     engine::end_frame();
   }
 
-  vulkan::ubos::cleanup(texture_ubo);
-  vulkan::ubos::cleanup(global_ubo);
+  vulkan::ssbo::cleanup(material_ssbo);
+  vulkan::ubos::cleanup(material_ssbo_ubo);
 
-  textures::cleanup(sampler);
-  textures::cleanup(world_texture);
+  vulkan::ubos::cleanup(texture_ubo);
 
   meshes::cleanup(mesh);
 

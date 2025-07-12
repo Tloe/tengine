@@ -34,6 +34,7 @@ namespace render {
   void set_view_projection(vulkan::UBOHandle ubo, const glm::mat4& view, const glm::mat4& proj);
   void set_model(vulkan::UBOHandle ubo, const glm::mat4& model, I32 texture_index = -1);
 
+  void draw();
   void draw(MeshHandle mesh);
 
   void begin_frame();

@@ -1,13 +1,14 @@
 set(HEADERS
-    sim.h)
+    simulation.h)
 
 set(SOURCES
     main.cpp
-    sim.cpp)
+    simulation.cpp)
+
+add_executable(fightspace)
 
 target_sources(fightspace PUBLIC ${HEADERS} PRIVATE ${SOURCES})
 
-add_executable(fightspace)
 
 target_link_libraries(fightspace
   PRIVATE

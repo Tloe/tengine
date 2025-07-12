@@ -68,7 +68,7 @@ vulkan::CommandBufferHandle vulkan::command_buffers::create() {
   CommandBuffer* command_buffer;
 
   U8 loops = 0;
-  for (;;) {
+  for (;;loops++, next_handle++) {
     if (loops >= MAX_COMMAND_BUFFERS) {
       printf("failed to allocate command buffers, none available!\n");
       exit(0);
@@ -109,9 +109,6 @@ vulkan::CommandBufferHandle vulkan::command_buffers::create() {
       command_buffer->recording = true;
       break;
     }
-
-    next_handle++;
-    loops++;
   }
 
   return CommandBufferHandle{.value = next_handle++};

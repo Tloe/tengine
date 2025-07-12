@@ -71,8 +71,8 @@ MeshHandle meshes::create(const char* fpath) {
       shapes.size(),
       hashmap::hasher<const vulkan::VertexTex&>);
 
-  auto vertices = S_DARRAY_EMPTY(vulkan::VertexTex);
-  auto indices  = S_DARRAY_EMPTY(U32);
+  auto vertices = S_DARRAY(vulkan::VertexTex);
+  auto indices  = S_DARRAY(U32);
 
   for (U32 shapes_i = 0; shapes_i < shapes.size(); ++shapes_i) {
     for (U32 indices_i = 0; indices_i < shapes[shapes_i].mesh.indices.size(); ++indices_i) {
@@ -203,6 +203,13 @@ void meshes::draw(vulkan::PipelineHandle      pipeline,
 
     vkCmdDrawIndexed(vk_command_buffer, mesh->index_count, 1, 0, 0, 0);
   } else {
+    vkCmdPushConstants(vk_command_buffer,
+                       *vulkan::pipelines::layout(pipeline),
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0,
+                       sizeof(MeshGPUConstants),
+                       &mesh->gpu_constants);
+
     vkCmdDraw(vk_command_buffer, mesh->vertex_count, 1, 0, 0);
   }
 }

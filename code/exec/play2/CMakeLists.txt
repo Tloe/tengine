@@ -1,6 +1,4 @@
-target_sources(play2 main.cpp)
-
-add_executable(play2)
+add_executable(play2 main.cpp)
 
 target_link_libraries(play2
   PRIVATE

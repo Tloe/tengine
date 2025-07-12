@@ -29,6 +29,7 @@ namespace {
     void*                 memory      = nullptr;
   };
 
+
   U8   next_handle = 0;
   auto mem_render  = arena::by_name("render");
 
@@ -51,22 +52,20 @@ namespace {
     create_info.pBindings    = &binding;
 
     auto loops = 0;
-    for (U8 i = next_handle; i < _ubo_datas.size; ++i) {
+    for (;; loops++, next_handle++) {
       if (loops >= MAX_UBOS) {
-        assert(false && "too many ubos allocated! Increase MAX_UBOS.");
+        printf("Too many ubos allocated! Increase MAX_UBOS.\n");
+        exit(0);
       }
-      if (_ubo_datas.data[i].descriptor_set == VK_NULL_HANDLE) {
-        next_handle = i;
+
+      if (next_handle >= MAX_UBOS) next_handle = 0;
+
+      if (_ubo_datas.data[next_handle].descriptor_set == VK_NULL_HANDLE) {
         break;
       }
-      next_handle++;
-      loops++;
     }
 
-    auto ubo = vulkan::UBOHandle{.value = next_handle++};
-
-    auto ubo_data = &_ubo_datas.data[ubo.value];
-
+    auto ubo_data = &_ubo_datas.data[next_handle];
     ASSERT_SUCCESS("failed to create ubo descriptor set layout!",
                    vkCreateDescriptorSetLayout(vulkan::_ctx.logical_device,
                                                &create_info,
@@ -79,18 +78,23 @@ namespace {
     alloc_info.descriptorSetCount = 1;
     alloc_info.pSetLayouts        = &ubo_data->descriptor_set_layout;
 
-    vkAllocateDescriptorSets(vulkan::_ctx.logical_device, &alloc_info, &ubo_data->descriptor_set);
+    ASSERT_SUCCESS("failed to allocate descriptor sets",
+                   vkAllocateDescriptorSets(vulkan::_ctx.logical_device,
+                                            &alloc_info,
+                                            &ubo_data->descriptor_set));
 
-    return ubo;
+    return vulkan::UBOHandle{.value = next_handle++};
   }
 }
 
 void vulkan::ubos::init(Settings settings) {
-  VkDescriptorPoolSize pool_sizes[2];
+  VkDescriptorPoolSize pool_sizes[3];
   pool_sizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   pool_sizes[0].descriptorCount = settings.ubo_count;
   pool_sizes[1].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   pool_sizes[1].descriptorCount = settings.max_textures;
+  pool_sizes[2].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  pool_sizes[2].descriptorCount = settings.ssbo_count;
 
   VkDescriptorPoolCreateInfo pool_create_info{};
   pool_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -158,6 +162,7 @@ vulkan::ubos::create_ssbo_ubo(U8 set_index, StageFlags stages, vulkan::SSBOBuffe
 
   ubo_data->buffer = buffer;
 
+  printf("Creating SSBO UBO %d %d\n", ubo.value, ubo_data->buffer.value);
   VkDescriptorBufferInfo buffer_info{};
   buffer_info.buffer = *vulkan::buffers::vk_buffer(ubo_data->buffer);
   buffer_info.offset = 0;
@@ -168,7 +173,7 @@ vulkan::ubos::create_ssbo_ubo(U8 set_index, StageFlags stages, vulkan::SSBOBuffe
   write.dstSet          = ubo_data->descriptor_set;
   write.dstBinding      = 0;
   write.descriptorCount = 1;
-  write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
   write.pBufferInfo     = &buffer_info;
 
   vkUpdateDescriptorSets(vulkan::_ctx.logical_device, 1, &write, 0, nullptr);
@@ -197,7 +202,7 @@ vulkan::ubos::create_texture_set(U8 set_index, StageFlags stages, U32 texture_co
 }
 
 void vulkan::ubos::cleanup(UBOHandle ubo) {
-  auto ubo_data       = &_ubo_datas.data[ubo.value];
+  auto ubo_data = &_ubo_datas.data[ubo.value];
 
   if (!handles::invalid(ubo_data->buffer)) {
     vulkan::buffers::cleanup(ubo_data->buffer);
@@ -208,12 +213,6 @@ void vulkan::ubos::cleanup(UBOHandle ubo) {
                                nullptr);
 
   _ubo_datas.data[ubo.value] = UBOData{};
-}
-
-void vulkan::ubos::set_ubo(UBOHandle ubo, void* data) {
-  auto ubo_data       = &_ubo_datas.data[ubo.value];
-
-  memcpy(ubo_data->memory, data, ubo_data->memory_size);
 }
 
 void vulkan::ubos::set_textures(UBOHandle ubo, DynamicArray<vulkan::TextureHandle> textures) {
@@ -227,7 +226,7 @@ void vulkan::ubos::set_textures(UBOHandle ubo, DynamicArray<vulkan::TextureHandl
     hashmap::insert(_texture_indexes, textures._data[i].value, i);
   }
 
-  auto ubo_data       = &_ubo_datas.data[ubo.value];
+  auto ubo_data = &_ubo_datas.data[ubo.value];
 
   VkWriteDescriptorSet texture_write{};
   texture_write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -246,7 +245,7 @@ U32 vulkan::ubos::texture_index(vulkan::TextureHandle texture) {
 
 void
 vulkan::ubos::bind(UBOHandle ubo, CommandBufferHandle command_buffer, PipelineHandle pipeline) {
-  auto ubo_data       = &_ubo_datas.data[ubo.value];
+  auto ubo_data = &_ubo_datas.data[ubo.value];
 
   vkCmdBindDescriptorSets(*command_buffers::buffer(command_buffer),
                           VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -260,4 +259,8 @@ vulkan::ubos::bind(UBOHandle ubo, CommandBufferHandle command_buffer, PipelineHa
 
 VkDescriptorSetLayout vulkan::ubos::descriptor_set_layout(UBOHandle ubo) {
   return _ubo_datas.data[ubo.value].descriptor_set_layout;
+}
+
+U8* vulkan::ubos::mapped(vulkan::UBOHandle ubo) {
+  return static_cast<U8*>(_ubo_datas.data[ubo.value].memory);
 }

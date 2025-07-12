@@ -22,7 +22,6 @@ namespace {
 }
 
 const engine::State* engine::init(const engine::Setting& settings) {
-
   SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
   SDL_SetHint(SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1");
 
@@ -75,42 +74,42 @@ void engine::begin_frame() {
         break;
       }
       case SDL_EVENT_KEY_DOWN:
-        SDL_Log("Key Down: %s", SDL_GetKeyName(event.key.));
-        if (event.key.keysym.sym == SDLK_ESCAPE) {
-          running = false;
+        printf("key press: %s\n", SDL_GetKeyName(event.key.key));
+        if (event.key.key == SDLK_ESCAPE) {
+          state.quit = true;
         }
         break;
 
-      case SDL_EVENT_KEY_UP:
-        SDL_Log("Key Up: %s", SDL_GetKeyName(event.key.keysym.sym));
-        break;
-
-      // Mouse motion
-      case SDL_EVENT_MOUSE_MOTION:
-        SDL_Log("Mouse moved to (%d, %d)", event.motion.x, event.motion.y);
-        break;
-
-      // Mouse button press
-      case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        SDL_Log("Mouse button %d down at (%f, %f)",
-                event.button.button,
-                event.button.x,
-                event.button.y,
-                event.button.repeat);
-        break;
-
-      // Mouse button release
-      case SDL_EVENT_MOUSE_BUTTON_UP:
-        SDL_Log("Mouse button %d up at (%f, %f)",
-                event.button.button,
-                event.button.x,
-                event.button.y);
-        break;
-
-      // Mouse wheel scroll
-      case SDL_EVENT_MOUSE_WHEEL:
-        SDL_Log("Mouse wheel: (%d, %d)", event.wheel.x, event.wheel.y);
-        break;
+      // case SDL_EVENT_KEY_UP:
+      //   SDL_Log("Key Up: %s", SDL_GetKeyName(event.key.keysym.sym));
+      //   break;
+      //
+      // // Mouse motion
+      // case SDL_EVENT_MOUSE_MOTION:
+      //   SDL_Log("Mouse moved to (%d, %d)", event.motion.x, event.motion.y);
+      //   break;
+      //
+      // // Mouse button press
+      // case SDL_EVENT_MOUSE_BUTTON_DOWN:
+      //   SDL_Log("Mouse button %d down at (%f, %f)",
+      //           event.button.button,
+      //           event.button.x,
+      //           event.button.y,
+      //           event.button.repeat);
+      //   break;
+      //
+      // // Mouse button release
+      // case SDL_EVENT_MOUSE_BUTTON_UP:
+      //   SDL_Log("Mouse button %d up at (%f, %f)",
+      //           event.button.button,
+      //           event.button.x,
+      //           event.button.y);
+      //   break;
+      //
+      // // Mouse wheel scroll
+      // case SDL_EVENT_MOUSE_WHEEL:
+      //   SDL_Log("Mouse wheel: (%d, %d)", event.wheel.x, event.wheel.y);
+      //   break;
       case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
         render::resize_framebuffers();
         break;

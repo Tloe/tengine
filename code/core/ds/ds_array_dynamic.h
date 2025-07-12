@@ -44,12 +44,12 @@ namespace array {
 }
 
 #define S_DARRAY(T, ...)       array::init<T>(arena::scratch(), std::initializer_list<T>{__VA_ARGS__})
-#define S_DARRAY_EMPTY(T)      array::init<T>(arena::scratch())
+// #define S_DARRAY_EMPTY(T)      array::init<T>(arena::scratch())
 #define S_DARRAY_CAP(T, CAP)   array::init<T>(arena::scratch(), CAP)
 #define S_DARRAY_SIZE(T, SIZE) array::init<T>(arena::scratch(), SIZE, SIZE)
 
 #define F_DARRAY(T, ...)       array::init<T>(arena::frame(), std::initializer_list<T>{__VA_ARGS__})
-#define F_DARRAY_EMPTY(T)      array::init<T>(arena::frame())
+// #define F_DARRAY_EMPTY(T)      array::init<T>(arena::frame())
 #define F_DARRAY_CAP(T, CAP)   array::init<T>(arena::frame(), CAP)
 #define F_DARRAY_SIZE(T, SIZE) array::init<T>(arena::frame(), SIZE, SIZE)
 
@@ -89,6 +89,10 @@ namespace array {
   template <typename T>
   DynamicArray<T> init(ArenaHandle a, std::initializer_list<T> ilist) {
     U32 size = static_cast<U32>(ilist.size());
+
+    if (size == 0) {
+      return init<T>(a);
+    }
 
     DynamicArray<T> da{
         ._size         = size,
@@ -148,7 +152,7 @@ namespace array {
   template <typename T>
   T& push_back(DynamicArray<T>& da, const T& t) {
     if (da._size == da._capacity) {
-      reserve(da, da._capacity * 2);
+      reserve(da, (da._capacity == 0 ? 1 : da._capacity * 2));
     }
 
     return da._data[da._size++] = t;
@@ -157,7 +161,7 @@ namespace array {
   template <typename T>
   T& push_back(DynamicArray<T>& da, T& t) {
     if (da._size == da._capacity) {
-      reserve(da, da._capacity * 2);
+      reserve(da, (da._capacity == 0 ? 1 : da._capacity * 2));
     }
 
     return da._data[da._size++] = t;

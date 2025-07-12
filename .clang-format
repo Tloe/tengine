@@ -4,11 +4,11 @@ FixNamespaceComments: false
 AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortBlocksOnASingleLine: Empty
 AllowShortFunctionsOnASingleLine: All
-ColumnLimit: 100
+ColumnLimit: 80
 BinPackArguments: false
 BinPackParameters: false
 ExperimentalAutoDetectBinPacking: false
-AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: true
 AllowAllArgumentsOnNextLine: false
 IndentCaseLabels: true
 BreakAfterReturnType: Automatic 

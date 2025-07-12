@@ -72,6 +72,8 @@ vulkan::BufferHandle vulkan::buffers::create(VkDeviceSize          byte_size,
 void vulkan::buffers::cleanup(BufferHandle buffer) {
   auto buffer_data = hashmap::value(_buffers, buffer.value);
 
+  if (buffer_data == nullptr) return;
+
   if (buffer_data->mapped) unmap(buffer);
 
   vkDestroyBuffer(vulkan::_ctx.logical_device, *vk_buffer(buffer), nullptr);

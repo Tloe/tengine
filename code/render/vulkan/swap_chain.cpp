@@ -244,8 +244,8 @@ vulkan::SwapChainSupport
 vulkan::swap_chain::swap_chain_support(VkPhysicalDevice device, VkSurfaceKHR surface) {
   SwapChainSupport details{
       .capabilities  = VkSurfaceCapabilitiesKHR{},
-      .formats       = S_DARRAY_EMPTY(VkSurfaceFormatKHR),
-      .present_modes = S_DARRAY_EMPTY(VkPresentModeKHR),
+      .formats       = S_DARRAY(VkSurfaceFormatKHR),
+      .present_modes = S_DARRAY(VkPresentModeKHR),
   };
 
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);

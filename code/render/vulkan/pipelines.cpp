@@ -1,5 +1,6 @@
 #include "pipelines.h"
 
+#include "common.h"
 #include "context.h"
 #include "ds_array_dynamic.h"
 #include "ds_hashmap.h"
@@ -9,12 +10,11 @@
 #include "meshes.h"
 #include "render_pass.h"
 #include "swap_chain.h"
-#include "common.h"
 #include "vulkan/command_buffers.h"
 #include "vulkan/ubos.h"
+#include "vulkan_include.h"
 
 #include <cstdio>
-#include "vulkan_include.h"
 
 namespace {
   ArenaHandle mem_render = arena::by_name("render");
@@ -72,8 +72,8 @@ vulkan::PipelineHandle vulkan::pipelines::create(RenderPassHandle render_pass, S
   // fixed function stages
   VkPipelineVertexInputStateCreateInfo vertex_input_info{};
   vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertex_input_info.vertexBindingDescriptionCount   = 1;
-  vertex_input_info.pVertexBindingDescriptions      = &settings.binding_description;
+  vertex_input_info.vertexBindingDescriptionCount   = settings.binding_description_count;
+  vertex_input_info.pVertexBindingDescriptions      = settings.binding_description;
   vertex_input_info.vertexAttributeDescriptionCount = settings.attribute_descriptions_format_count;
   vertex_input_info.pVertexAttributeDescriptions    = settings.attribute_descriptions;
 
@@ -159,7 +159,7 @@ vulkan::PipelineHandle vulkan::pipelines::create(RenderPassHandle render_pass, S
 
   VkPipelineColorBlendAttachmentState color_blend_attachment{};
   if (settings.disable_depth_testing) {
-    printf("enable blending!!!!!!\n"); 
+    printf("enable blending!!!!!!\n");
     // FIXME this is just a hack to set this for ui
     color_blend_attachment.blendEnable         = VK_TRUE;
     color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;

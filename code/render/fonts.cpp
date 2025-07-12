@@ -5,6 +5,7 @@
 #include "handle.h"
 #include "handles.h"
 #include "textures.h"
+#include "vulkan/textures.h"
 #include "vulkan/vulkan_include.h"
 
 #include <fstream>
@@ -99,4 +100,6 @@ void render::fonts::cleanup(FontHandle handle) {
   textures::cleanup(font.sampler);
 }
 
-render::Font render::fonts::font(FontHandle handle) { return _fonts.data[handle.value]; }
+render::Font render::fonts::font(FontHandle handle) {
+  return _fonts.data[handle.value];
+}

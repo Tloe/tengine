@@ -39,11 +39,12 @@ vulkan::TextureSamplerHandle vulkan::samplers::create(U32 mip_levels) {
   sampler_info.mipLodBias = 0.0f; // Optional
 
   TextureSamplerHandle handle{.value = next_handle++};
-  auto                 texture_sampler = hashmap::insert(::samplers, handle.value, VkSampler{});
+
+  auto sampler = hashmap::insert(::samplers, handle.value, VkSampler{});
 
   ASSERT_SUCCESS(
       "failed to create texture sampler!",
-      vkCreateSampler(vulkan::_ctx.logical_device, &sampler_info, nullptr, texture_sampler));
+      vkCreateSampler(vulkan::_ctx.logical_device, &sampler_info, nullptr, sampler));
 
   return handle;
 }

@@ -38,13 +38,16 @@ int main() {
           },
   });
 
-  auto global_ubo  = vulkan::ubos::create_ubo_buffer(0, sizeof(vulkan::GlobalUBO));
-  auto texture_ubo = vulkan::ubos::create_texture_set(2, 1);
+  auto global_ubo  = vulkan::ubos::create_ubo_buffer(0,
+                                                    vulkan::StageFlags::SHADER_VERTEX,
+                                                    sizeof(vulkan::GlobalUBO));
+  auto texture_ubo = vulkan::ubos::create_texture_set(2, vulkan::StageFlags::SHADER_FRAGMENT, 1);
 
   auto render_pipeline = render::create_pipeline({
       .vertex_shader_fpath                 = "vert.spv",
       .fragment_shader_fpath               = "frag.spv",
-      .binding_description                 = vulkan::VERTEX_TEX_BINDING_DESC,
+      .binding_description_count           = 1,
+      .binding_description                 = &vulkan::VERTEX_TEX_BINDING_DESC,
       .attribute_descriptions              = vulkan::VERTEX_TEX_ATTRIBUTE_DESC,
       .attribute_descriptions_format_count = array::size(vulkan::VERTEX_TEX_ATTRIBUTE_DESC),
       .ubos                                = S_DARRAY(vulkan::UBOHandle, global_ubo, texture_ubo),

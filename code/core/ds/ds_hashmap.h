@@ -208,7 +208,7 @@ namespace hashmap {
             arena_handle,
             capacity * sizeof(typename THashMap<K, empty_value, V>::KeyValue)),
         ._arena_handle = arena_handle,
-        ._hasher_fn    = hasher,
+        ._hasher_fn    = hasher_fn,
     };
 
     _fill_empty_values<K, empty_value, V>(hm);
@@ -313,8 +313,7 @@ namespace hashmap {
         break;
       }
 
-      U64 desired = hash_index(hm, hm._data[index].k);
-
+      U64 desired   = hash_index(hm, hm._data[index].k);
       U64 curr_dist = (index + hm._capacity - desired) & (hm._capacity - 1);
       if (curr_dist < dist) {
         std::swap(k, hm._data[index].k);

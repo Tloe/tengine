@@ -1,35 +1,11 @@
 #version 450
 
-const uint MATERIAL_BORDER = 0u;
-const uint MATERIAL_AIR    = 1u;
-const uint MATERIAL_SAND   = 2u;
-const uint MATERIAL_WATER  = 3u;
-const uint MATERIAL_WOOD   = 4u;
-const uint MATERIAL_STONE  = 5u;
-const uint MATERIAL_FIRE   = 6u;
-
-layout(set = 0, binding = 0) uniform GlobalUBO {
-    mat4 view;
-    mat4 proj;
-} globalUBO;
-
-layout(set = 2, binding = 0) buffer MaterialTypeBuffer{
-    uint materials[];
-};
-
-layout(push_constant) uniform ModelPC {
-    mat4 model;
-    int textureIndex;
-} model_constants;
-
-layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec2 inTexCoord;
-
-layout(location = 0) out vec2 fragTexCoord;
-layout(location = 1) flat out int fragTexIndex;
+const vec2 VERTICES[3] = vec2[](
+    vec2(-1.0, -1.0),
+    vec2( 3.0, -1.0),
+    vec2(-1.0,  3.0) 
+);
 
 void main() {
-    gl_Position = globalUBO.proj * globalUBO.view * model_constants.model * vec4(inPosition, 1.0);
-    fragTexCoord = inTexCoord;
-    fragTexIndex = model_constants.textureIndex;
+    gl_Position = vec4(VERTICES[gl_VertexIndex], 0.0, 1.0);
 }

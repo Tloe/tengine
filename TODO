@@ -1,0 +1,6 @@
+- upload world sim to ssbo
+  - handle in shader
+- add material with point and click
+
+pipeline:
+- compile shaders as part of build step and output to exec/<project name>

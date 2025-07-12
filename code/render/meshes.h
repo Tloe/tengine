@@ -53,8 +53,18 @@ namespace meshes {
   }
 
   template <typename VertexT>
+  MeshHandle create(const VertexT* vertices,
+                    const U32      vertices_size) {
+    return create(vulkan::vertex_buffers::create(static_cast<const void*>(vertices),
+                                                 vertices_size * sizeof(VertexT)),
+                  vulkan::IndexBufferHandle(),
+                  vertices_size,
+                  0);
+  }
+
+  template <typename VertexT>
   MeshHandle
-  create(DynamicArray<VertexT>& vertices, DynamicArray<U32>& indices = S_DARRAY_EMPTY(VertexT)) {
+  create(DynamicArray<VertexT>& vertices, DynamicArray<U32>& indices = S_DARRAY(VertexT)) {
     if (indices._size == 0) {
       return create(vulkan::vertex_buffers::create(vertices),
                     vulkan::IndexBufferHandle(),
