@@ -1,5 +1,6 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_debug_printf : enable
 
 const uint MATERIAL_BORDER = 0u;
 const uint MATERIAL_AIR    = 1u;

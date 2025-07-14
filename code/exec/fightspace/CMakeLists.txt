@@ -1,8 +1,10 @@
 set(HEADERS
+    ui.h
     simulation.h)
 
 set(SOURCES
     main.cpp
+    ui.cpp
     simulation.cpp)
 
 add_executable(fightspace)

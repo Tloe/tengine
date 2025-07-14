@@ -12,14 +12,16 @@ struct DynamicSparseArray {
 
 namespace sparse {
   template <typename T, typename LType>
-  DynamicSparseArray<T, LType> init(ArenaHandle arena, LType max_instance, U32 initial_capacity = 16) {
+  DynamicSparseArray<T, LType>
+  init(ArenaHandle arena, LType max_instance, U32 initial_capacity = 16) {
     DynamicSparseArray<T, LType> sa{
-      ._data            = array::init<T>(arena, initial_capacity),
-      .__lookup         = array::init<LType>(arena, initial_capacity, max_instance),
-      .__reverse_lookup = array::init<LType>(arena, initial_capacity, max_instance),
-      ._size            = 0,
-      .__next_id        = 0,
-      ._max_instance    = max_instance,
+        ._data    = array::init<T>(arena, initial_capacity),
+        .__lookup = array::init<LType>(arena, initial_capacity, max_instance),
+        .__reverse_lookup =
+            array::init<LType>(arena, initial_capacity, max_instance),
+        ._size         = 0,
+        .__next_id     = 0,
+        ._max_instance = max_instance,
     };
     return sa;
   }
@@ -31,7 +33,8 @@ namespace sparse {
       for (U32 i = sa.__lookup._size; i < sa.__lookup._capacity; ++i)
         sa.__lookup._data[i] = sa._max_instance;
       array::resize(sa.__reverse_lookup, id + 1);
-      for (U32 i = sa.__reverse_lookup._size; i < sa.__reverse_lookup._capacity; ++i)
+      for (U32 i = sa.__reverse_lookup._size; i < sa.__reverse_lookup._capacity;
+           ++i)
         sa.__reverse_lookup._data[i] = sa._max_instance;
     }
     if (sa._size >= sa._data._capacity) {
@@ -41,17 +44,19 @@ namespace sparse {
     if (sa.__lookup._data[id] != sa._max_instance) {
       sa._data._data[sa.__lookup._data[id]] = value;
     } else {
-      U32 data_index                       = sa._size++;
-      sa.__lookup._data[id]                = data_index;
+      U32 data_index                        = sa._size++;
+      sa.__lookup._data[id]                 = data_index;
       sa.__reverse_lookup._data[data_index] = id;
-      sa._data._data[data_index]           = value;
+      sa._data._data[data_index]            = value;
     }
     return true;
   }
 
   template <typename T, typename LType>
   void remove(DynamicSparseArray<T, LType>& sa, LType id) {
-    if (id >= sa.__lookup._capacity || sa.__lookup._data[id] == sa._max_instance) return;
+    if (id >= sa.__lookup._capacity ||
+        sa.__lookup._data[id] == sa._max_instance)
+      return;
 
     U32 data_index = sa.__lookup._data[id];
     U32 last_index = sa._size - 1;
@@ -59,7 +64,7 @@ namespace sparse {
     if (data_index != last_index) {
       sa._data._data[data_index] = sa._data._data[last_index];
 
-      LType moved_id                        = sa.__reverse_lookup._data[last_index];
+      LType moved_id = sa.__reverse_lookup._data[last_index];
       sa.__reverse_lookup._data[data_index] = moved_id;
 
       sa.__lookup._data[moved_id] = data_index;
@@ -73,12 +78,14 @@ namespace sparse {
 
   template <typename T, typename LType>
   bool has(const DynamicSparseArray<T, LType>& sa, LType id) {
-    return id < sa.__lookup._capacity && sa.__lookup._data[id] != sa._max_instance;
+    return id < sa.__lookup._capacity &&
+           sa.__lookup._data[id] != sa._max_instance;
   }
 
   template <typename T, typename LType>
   T* value(DynamicSparseArray<T, LType>& sa, LType id) {
-    if (id < sa.__lookup._capacity && sa.__lookup._data[id] != sa._max_instance) {
+    if (id < sa.__lookup._capacity &&
+        sa.__lookup._data[id] != sa._max_instance) {
       return &sa._data._data[sa.__lookup._data[id]];
     } else {
       return nullptr;
@@ -99,7 +106,9 @@ namespace sparse {
         for (U32 i = sa.__lookup._size; i < sa.__lookup._capacity; ++i)
           sa.__lookup._data[i] = sa._max_instance;
         array::resize(sa.__reverse_lookup, next_id + 1);
-        for (U32 i = sa.__reverse_lookup._size; i < sa.__reverse_lookup._capacity; ++i)
+        for (U32 i = sa.__reverse_lookup._size;
+             i < sa.__reverse_lookup._capacity;
+             ++i)
           sa.__reverse_lookup._data[i] = sa._max_instance;
         cap = sa.__lookup._capacity;
       }
@@ -115,4 +124,3 @@ namespace sparse {
     return core::max_type<LType>();
   }
 }
-

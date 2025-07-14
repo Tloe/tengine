@@ -8,6 +8,20 @@
 #include <cstring>
 #include <initializer_list>
 
+// clang-format off
+#define S_DARRAY(T, ...)       array::init<T>(arena::scratch(), std::initializer_list<T>{__VA_ARGS__})
+#define S_DARRAY_CAP(T, CAP)   array::init<T>(arena::scratch(), CAP)
+#define S_DARRAY_SIZE(T, SIZE) array::init<T>(arena::scratch(), SIZE, SIZE)
+
+#define F_DARRAY(T, ...)       array::init<T>(arena::frame(), std::initializer_list<T>{__VA_ARGS__})
+#define F_DARRAY_CAP(T, CAP)   array::init<T>(arena::frame(), CAP)
+#define F_DARRAY_SIZE(T, SIZE) array::init<T>(arena::frame(), SIZE, SIZE)
+
+#define A_DARRAY(T, ARENA, ...)       array::init<T>(ARENA, std::initializer_list<T>{__VA_ARGS__})
+#define A_DARRAY_CAP(T, ARENA, CAP)   array::init<T>(ARENA, CAP)
+#define A_DARRAY_SIZE(T, ARENA, SIZE) array::init<T>(ARENA, SIZE, SIZE)
+// clang-format on
+
 template <typename T>
 struct DynamicArray {
   U32         _size     = 0;
@@ -42,20 +56,6 @@ namespace array {
   template <typename T>
   bool contains(DynamicArray<T>& da, T& t);
 }
-
-#define S_DARRAY(T, ...)       array::init<T>(arena::scratch(), std::initializer_list<T>{__VA_ARGS__})
-// #define S_DARRAY_EMPTY(T)      array::init<T>(arena::scratch())
-#define S_DARRAY_CAP(T, CAP)   array::init<T>(arena::scratch(), CAP)
-#define S_DARRAY_SIZE(T, SIZE) array::init<T>(arena::scratch(), SIZE, SIZE)
-
-#define F_DARRAY(T, ...)       array::init<T>(arena::frame(), std::initializer_list<T>{__VA_ARGS__})
-// #define F_DARRAY_EMPTY(T)      array::init<T>(arena::frame())
-#define F_DARRAY_CAP(T, CAP)   array::init<T>(arena::frame(), CAP)
-#define F_DARRAY_SIZE(T, SIZE) array::init<T>(arena::frame(), SIZE, SIZE)
-
-#define A_DARRAY(T, ARENA, ...)       array::init<T>(ARENA, std::initializer_list<T>{__VA_ARGS__})
-#define A_DARRAY_CAP(T, ARENA, CAP)   array::init<T>(ARENA, CAP)
-#define A_DARRAY_SIZE(T, ARENA, SIZE) array::init<T>(ARENA, SIZE, SIZE)
 
 namespace array {
   template <typename T>
