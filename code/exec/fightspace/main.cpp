@@ -38,7 +38,7 @@ int main() {
 
   auto material_ssbo = vulkan::ssbo::create(192 * 108 * sizeof(U8));
 
-  auto texture_ubo =
+  auto texture_set_ubo =
       vulkan::ubos::create_texture_set(0,
                                        vulkan::StageFlags::SHADER_FRAGMENT,
                                        1);
@@ -51,7 +51,7 @@ int main() {
   auto render_pipeline = render::create_pipeline({
       .vertex_shader_fpath   = "vert.spv",
       .fragment_shader_fpath = "frag.spv",
-      .ubos = S_DARRAY(vulkan::UBOHandle, texture_ubo, material_ssbo_ubo),
+      .ubos = S_DARRAY(vulkan::UBOHandle, texture_set_ubo, material_ssbo_ubo),
   });
 
   simulation::init(0, 0, 1024, 1024, vulkan::ubos::mapped(material_ssbo_ubo));
@@ -72,7 +72,7 @@ int main() {
   vulkan::ssbo::cleanup(material_ssbo);
   vulkan::ubos::cleanup(material_ssbo_ubo);
 
-  vulkan::ubos::cleanup(texture_ubo);
+  vulkan::ubos::cleanup(texture_set_ubo);
 
   engine::cleanup();
 

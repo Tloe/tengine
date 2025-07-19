@@ -1,6 +1,20 @@
 
 #include "exec/fightspace/ui.h"
+
+#include "handles.h"
+#include "textures.h"
 #include "types.h"
+#include "vulkan/images.h"
+
+namespace { TextureHandle test_texture; }
+
+void fightspace_ui_init() {
+  test_texture = textures::load_mipmaped("texture.jpg");
+
+  auto mip_levels = vulkan::images::mip_levels(test_texture);
+  auto sampler    = textures::create_sampler(mip_levels);
+  textures::set_sampler(test_texture, sampler);
+}
 
 Clay_RenderCommandArray fightspace_ui() {
   Clay_BeginLayout();
@@ -64,14 +78,13 @@ Clay_RenderCommandArray fightspace_ui() {
                                          .height = CLAY_SIZING_FIXED(50)}},
           .backgroundColor = {.r = 100, .g = 0, .b = 0, .a = 255},
           .cornerRadius    = CLAY_CORNER_RADIUS(8),
+          .image           =,
           .border =
               {
                   .color = {.r = 255, .g = 189, .b = 39, .a = 255},
                   .width = {2, 2, 2, 2, 0},
               },
-      }) {
-        // etc
-      }
+      }) {}
     }
   }
 

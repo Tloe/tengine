@@ -758,12 +758,12 @@ void ui::draw_frame() {
         vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
       } break;
       case CLAY_RENDER_COMMAND_TYPE_IMAGE: {
-        // Clay_ImageRenderData* config = &clay_command->renderData.image;
+        Clay_ImageRenderData* config = &clay_command->renderData.image;
 
-        // if (config->textureId == 0) {
-        //   // no texture, skip
-        //   break;
-        // }
+        if (config->textureId == 0) {
+          // no texture, skip
+          break;
+        }
         //
         // auto texture = render::textures::texture(TextureHandle{.value = config->textureId});
         //

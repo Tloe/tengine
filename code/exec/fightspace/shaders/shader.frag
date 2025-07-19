@@ -50,5 +50,5 @@ void main() {
     uint mat = materials[index];
 
     // Output color
-    outColor = vec4(MATERIAL_COLORS[mat], 1.0);
+    outColor = vec4(MATERIAL_COLORS[1], 1.0);
 }
